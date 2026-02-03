@@ -4,14 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="git">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="git branch -M main&#10;git push -u origin main">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/config/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/meu_site/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/meu_site/views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/meu_site/templates/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/site/home/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/meu_site/templates/home.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/meu_site/templates/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/meu_site/templates/home.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -99,13 +95,22 @@
       <option name="project" value="LOCAL" />
       <updated>1770137892410</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="git branch -M main&#10;git push -u origin main">
+      <option name="closed" value="true" />
+      <created>1770141220211</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1770141220211</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="primeiro" />
     <MESSAGE value="segundo" />
     <MESSAGE value="git" />
-    <option name="LAST_COMMIT_MESSAGE" value="git" />
+    <MESSAGE value="git branch -M main&#10;git push -u origin main" />
+    <option name="LAST_COMMIT_MESSAGE" value="git branch -M main&#10;git push -u origin main" />
   </component>
 </project>
