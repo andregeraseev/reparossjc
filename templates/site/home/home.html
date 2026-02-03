@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reparos SJC | Pequenos consertos e instalações</title>
+  <meta name="description" content="Reparos e instalações em São José dos Campos. Atendimento rápido, preço justo e serviço limpo. Orçamento pelo WhatsApp." />
+
+  <style>
+    :root{
+      --bg: #ffffff;
+      --card: #f7f8fb;
+      --text: #0f172a;
+      --muted: #475569;
+      --brand: #0d3b66;
+      --accent: #25D366; /* WhatsApp */
+      --border: rgba(15, 23, 42, 0.12);
+      --shadow: 0 10px 28px rgba(2, 6, 23, 0.10);
+      --radius: 18px;
+    }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica,Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    a{ color: inherit; text-decoration: none; }
+    .container{
+      width: min(1100px, 92vw);
+      margin: 0 auto;
+    }
+    header{
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+    .nav{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      padding: 14px 0;
+      gap: 16px;
+    }
+    .logo{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .badge{
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    nav ul{
+      display:flex;
+      gap: 14px;
+      list-style: none;
+      padding:0;
+      margin:0;
+    }
+    nav a{
+      font-size: 14px;
+      color: var(--muted);
+      padding: 8px 10px;
+      border-radius: 10px;
+    }
+    nav a:hover{ background: rgba(13, 59, 102, 0.08); color: var(--brand); }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .05s ease, opacity .2s ease;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn-primary{
+      background: var(--accent);
+      border-color: transparent;
+      color: #0b1b10;
+    }
+    .btn-secondary{
+      background: #ffffff;
+      color: var(--brand);
+    }
+
+    .hero{
+      padding: 48px 0 22px;
+      background: #80c8d8;
+}
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 22px;
+      align-items: stretch;
+    }
+    .hero h1{
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+      margin: 0 0 14px;
+      letter-spacing: -1px;
+    }
+    .hero p{
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .hero-actions{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .mini{
+      display:grid;
+      gap: 12px;
+      align-content: start;
+    }
+    .mini h3{
+      margin:0;
+      font-size: 16px;
+      color: var(--brand);
+    }
+    .mini ul{
+      margin:0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section{
+      padding: 22px 0;
+    }
+    .section-title{
+      display:flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .section-title h2{
+      margin:0;
+      font-size: 22px;
+      letter-spacing: -0.3px;
+    }
+    .section-title p{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .grid-3{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .item{
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .item h3{
+      margin: 0 0 6px;
+      font-size: 16px;
+      color: var(--brand);
+    }
+    .item p{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .list{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .pill{
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--muted);
+      display:flex;
+      gap: 10px;
+      align-items:center;
+    }
+    .dot{
+      width: 10px; height: 10px;
+      border-radius: 999px;
+      background: rgba(13, 59, 102, 0.30);
+      flex: 0 0 auto;
+    }
+
+    .steps{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      counter-reset: step;
+    }
+    .step{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .step::before{
+      counter-increment: step;
+      content: counter(step);
+      position:absolute;
+      top: 10px;
+      right: 12px;
+      font-weight: 900;
+      font-size: 34px;
+      color: rgba(13, 59, 102, 0.12);
+    }
+    .step h3{
+      margin:0 0 6px;
+      color: var(--brand);
+      font-size: 16px;
+    }
+    .step p{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .testimonials{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    blockquote{
+      margin:0;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    blockquote p{
+      margin:0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    blockquote footer{
+      font-size: 13px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+
+    .cta{
+      background: linear-gradient(135deg, rgba(13, 59, 102, 0.10), rgba(37, 211, 102, 0.10));
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 6px);
+      padding: 20px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .cta h2{ margin:0 0 6px; font-size: 20px; color: var(--brand); }
+    .cta p{ margin:0; color: var(--muted); font-size: 14px; }
+
+    footer{
+      padding: 26px 0 90px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+      margin-top: 24px;
+    }
+    .fine{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items:center;
+    }
+
+    /* WhatsApp floating */
+    .whatsapp-float{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 58px;
+      height: 58px;
+      border-radius: 999px;
+      background: var(--accent);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(0,0,0,0.08);
+      z-index: 999;
+    }
+    .whatsapp-float svg{ width: 26px; height: 26px; }
+
+    /* Responsive */
+    @media (max-width: 900px){
+      .hero-grid{ grid-template-columns: 1fr; }
+      .grid-3{ grid-template-columns: 1fr; }
+      .steps{ grid-template-columns: 1fr 1fr; }
+      .testimonials{ grid-template-columns: 1fr; }
+      nav ul{ display:none; }
+    }
+    @media (max-width: 520px){
+      .list{ grid-template-columns: 1fr; }
+      .steps{ grid-template-columns: 1fr; }
+      .btn{ width: 100%; }
+      .cta{ flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="container nav">
+    <div class="logo">
+      <span aria-hidden="true">🛠️</span>
+      <span>Reparos SJC</span>
+      <span class="badge">São José dos Campos</span>
+    </div>
+
+    <nav aria-label="Navegação">
+      <ul>
+        <li><a href="#servicos">Serviços</a></li>
+        <li><a href="#diferenciais">Diferenciais</a></li>
+        <li><a href="#como-funciona">Como funciona</a></li>
+        <li><a href="#avaliacoes">Avaliações</a></li>
+      </ul>
+    </nav>
+
+    <a class="btn btn-primary" id="btnTop" href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Vim%20pelo%20site%20Reparos%20SJC%20e%20quero%20um%20or%C3%A7amento." target="_blank" rel="noopener noreferrer">
+      💬 WhatsApp
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <h1>Pequenos consertos e instalações em <span style="color:var(--brand)">São José dos Campos</span>.</h1>
+        <p>
+          Atendimento direto comigo, sem enrolação: serviço limpo, preço justo e explicação clara do que será feito.
+          Me chama no WhatsApp e manda uma foto do problema pra eu te passar o valor.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Preciso%20de%20ajuda%20com%20reparo/instala%C3%A7%C3%A3o%20em%20SJC.%20Posso%20te%20mandar%20uma%20foto%3F" target="_blank" rel="noopener noreferrer">
+            ✅ Pedir orçamento no WhatsApp
+          </a>
+          <a class="btn btn-secondary" href="#servicos">
+            Ver serviços
+          </a>
+        </div>
+
+        <p style="margin-top:14px;font-size:13px;color:var(--muted)">
+          ⏱ Normalmente respondo rápido • 📍 Atendimento em SJC e região
+        </p>
+      </div>
+
+      <aside class="card mini" aria-label="Resumo rápido">
+        <h3>Atendo principalmente:</h3>
+        <ul>
+          <li>Hidráulica simples (torneira, sifão, registro, vazamento leve)</li>
+          <li>Instalações (chuveiro, suportes, prateleiras, cortina)</li>
+          <li>Ajustes e reparos (gavetas, portas, puxadores, fixações)</li>
+          <li>Montagem de móveis</li>
+        </ul>
+        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:12px;color:var(--muted);font-size:14px;">
+          <strong style="color:var(--brand)">Dica:</strong> mande foto + bairro pelo WhatsApp e eu já te passo uma noção.
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="servicos">
+    <div class="container">
+      <div class="section-title">
+        <h2>Serviços</h2>
+
+      </div>
+
+      <div class="list" role="list">
+        <div class="pill" role="listitem"><span class="dot"></span> Troca de torneira / sifão / engate</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Instalação de chuveiro / ducha</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Rejunte e pequenos acabamentos</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Instalação de suportes e prateleiras</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Fixação de puxadores e ajustes de gavetas</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Montagem de móveis</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Pequenos vazamentos e reparos hidráulicos</div>
+        <div class="pill" role="listitem"><span class="dot"></span> Reparos gerais (me chama e eu avalio)</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="diferenciais">
+    <div class="container">
+      <div class="section-title">
+        <h2>Diferenciais</h2>
+
+      </div>
+
+      <div class="grid-3">
+        <div class="item">
+          <h3>✅ Serviço limpo e organizado</h3>
+          <p>Cuido do ambiente, evito bagunça e deixo tudo do jeito que encontrei.</p>
+        </div>
+        <div class="item">
+          <h3>⏱ Pontualidade</h3>
+          <p>Combino horário e chego no horário. Se surgir algo, aviso antes.</p>
+        </div>
+        <div class="item">
+          <h3>💬 Transparência</h3>
+          <p>Eu explico o que será feito e o valor antes de começar. Sem surpresa.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona">
+    <div class="container">
+      <div class="section-title">
+        <h2>Como funciona</h2>
+        <p>Rápido e direto.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <h3>Você chama</h3>
+          <p>Me chama no WhatsApp e manda foto/vídeo do problema + bairro.</p>
+        </div>
+        <div class="step">
+          <h3>Eu avalio</h3>
+          <p>Eu te passo o valor ou uma estimativa e opções, se necessário.</p>
+        </div>
+        <div class="step">
+          <h3>Agendamos</h3>
+          <p>Definimos o melhor horário. Atendimento em São José dos Campos.</p>
+        </div>
+        <div class="step">
+          <h3>Eu resolvo</h3>
+          <p>Vou até você e faço o serviço com capricho e cuidado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+<!--
+  <section id="avaliacoes">
+    <div class="container">
+      <div class="section-title">
+        <h2>Avaliações</h2>
+      </div>
+
+      <div class="testimonials">
+        <blockquote>
+          <p>“Resolveu tudo rapidinho e deixou tudo organizado. Recomendo!”</p>
+          <footer>— Cliente em SJC</footer>
+        </blockquote>
+        <blockquote>
+          <p>“Preço justo e explicou certinho o que ia fazer antes de começar.”</p>
+          <footer>— Cliente em SJC</footer>
+        </blockquote>
+        <blockquote>
+          <p>“Pontual e caprichoso. Já salvei o contato pra próxima.”</p>
+          <footer>— Cliente em SJC</footer>
+        </blockquote>
+      </div>
+
+    </div>
+  </section>
+-->
+  <section>
+    <div class="container">
+      <div class="cta">
+        <div>
+          <h2>Precisando de reparo em São José dos Campos?</h2>
+          <p>Me chama no WhatsApp, manda uma foto e eu te passo o orçamento.</p>
+        </div>
+        <a class="btn btn-primary" href="https://wa.me/5512981298667text=Ol%C3%A1!%20Quero%20or%C3%A7amento%20para%20um%20reparo%20em%20S%C3%A3o%20Jos%C3%A9%20dos%20Campos.%20Posso%20te%20enviar%20uma%20foto%3F" target="_blank" rel="noopener noreferrer">
+          💬 Chamar no WhatsApp
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container fine">
+    <div>
+      <strong style="color:var(--brand)">Reparos SJC</strong> • São José dos Campos
+      <div style="margin-top:6px;">Horário: Seg–Sáb (combine pelo WhatsApp)</div>
+    </div>
+    <div>
+      <span>© <span id="year"></span> Reparos SJC • Feito para converter</span>
+    </div>
+  </div>
+</footer>
+
+<!-- WhatsApp Floating Button -->
+<a
+  class="whatsapp-float"
+  href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Vim%20pelo%20site%20Reparos%20SJC%20e%20quero%20um%20or%C3%A7amento."
+  target="_blank"
+  rel="noopener noreferrer"
+  aria-label="Chamar no WhatsApp"
+  title="Chamar no WhatsApp"
+>
+  <svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M19.11 17.2c-.28-.14-1.64-.81-1.9-.9-.26-.1-.45-.14-.64.14-.19.28-.74.9-.9 1.08-.17.19-.33.21-.61.07-.28-.14-1.2-.44-2.28-1.4-.84-.75-1.4-1.68-1.56-1.96-.16-.28-.02-.43.12-.57.12-.12.28-.33.42-.5.14-.17.19-.28.28-.47.09-.19.05-.36-.02-.5-.07-.14-.64-1.55-.88-2.12-.23-.56-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.28-1 1-1 2.44s1.03 2.83 1.17 3.03c.14.19 2.03 3.11 4.93 4.36.69.3 1.23.48 1.65.61.69.22 1.32.19 1.82.12.55-.08 1.64-.67 1.87-1.31.23-.64.23-1.19.16-1.31-.07-.12-.26-.19-.54-.33z"/>
+    <path d="M26.6 5.4A12.6 12.6 0 0 0 5.14 24.68L4 28l3.43-1.08A12.6 12.6 0 0 0 26.6 5.4zm-10 21.2c-2.1 0-4.14-.56-5.93-1.62l-.43-.25-2.03.64.66-1.97-.28-.45A10.2 10.2 0 1 1 16.6 26.6z"/>
+  </svg>
+</a>
+
+<script>
+  document.getElementById("year").textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>
