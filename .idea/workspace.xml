@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="primeiro">
-      <change beforePath="$PROJECT_DIR$/templates/site/home/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/site/home/home.html" afterDir="false" />
-    </list>
+    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="segundo" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,11 +61,28 @@
       <option name="project" value="LOCAL" />
       <updated>1770137157903</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="segundo">
+      <option name="closed" value="true" />
+      <created>1770137415189</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1770137415189</updated>
+    </task>
+    <task id="LOCAL-00003" summary="segundo">
+      <option name="closed" value="true" />
+      <created>1770137525038</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1770137525038</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="primeiro" />
-    <option name="LAST_COMMIT_MESSAGE" value="primeiro" />
+    <MESSAGE value="segundo" />
+    <option name="LAST_COMMIT_MESSAGE" value="segundo" />
   </component>
 </project>
