@@ -4,17 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/reparossjc.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/static/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/site/home/home.html" afterDir="false" />
+    <list default="true" id="7558ed02-33c7-44e7-81e1-0d22a6cf9b85" name="Changes" comment="primeiro">
+      <change beforePath="$PROJECT_DIR$/templates/site/home/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/site/home/home.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -64,6 +55,19 @@
       <option name="presentableId" value="Default" />
       <updated>1770134334693</updated>
     </task>
+    <task id="LOCAL-00001" summary="primeiro">
+      <option name="closed" value="true" />
+      <created>1770137157903</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1770137157903</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="primeiro" />
+    <option name="LAST_COMMIT_MESSAGE" value="primeiro" />
   </component>
 </project>
