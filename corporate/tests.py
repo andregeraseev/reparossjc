@@ -2,7 +2,7 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from .models import Organization, PartnerMembership, ServiceRequest
+from .models import AvailabilitySnapshot, Organization, PartnerMembership, ServiceRequest
 from .services import contract_for
 
 
@@ -21,6 +21,17 @@ class CorporateApiTests(TestCase):
 
     def test_operator_requires_token(self):
         self.assertEqual(self.client.get(reverse("corporate:operator_requests")).status_code, 401)
+
+    def test_operator_preflight_allows_webview_headers_without_token(self):
+        r = self.client.options(
+            reverse("corporate:operator_requests"),
+            HTTP_ORIGIN="null",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization,x-workspace-id,x-user-id",
+        )
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(r["Access-Control-Allow-Origin"], "*")
+        self.assertIn("Authorization", r["Access-Control-Allow-Headers"])
 
     def test_portal_creates_request_and_operator_receives_contract(self):
         self.client.login(username="amil", password="test-pass-123")
@@ -44,6 +55,19 @@ class CorporateApiTests(TestCase):
         self.client.login(username="amil", password="test-pass-123")
         self.assertEqual(self.client.post(reverse("corporate:portal_approve",args=[row.id])).status_code,302); row.refresh_from_db(); self.assertEqual(row.status,"quote_approved")
         self.assertEqual(self.client.post(reverse("corporate:portal_schedule",args=[row.id]),{"source_id":"W1"}).status_code,302); row.refresh_from_db(); self.assertEqual(row.status,"schedule_requested"); self.assertEqual(row.schedule_request["start"],"09:00")
+
+    def test_published_availability_updates_waiting_requests_and_rejects_stale_slot(self):
+        w1={"sourceId":"W1","date":"2026-08-28","start":"09:00","end":"11:00"}
+        w2={"sourceId":"W2","date":"2026-08-28","start":"14:00","end":"16:00"}
+        row=ServiceRequest.objects.create(id="SRAV",external_request_id="AMIL-AV",organization=self.org,workspace_id="ws_test",description="Teste",quote={"id":"QAV","status":"Enviado","total":200},status="waiting_schedule",client_decision="approved",proposed_windows=[w1])
+        api=self.client.post(reverse("corporate:operator_availability"),data=json.dumps({"windows":[w2]}),content_type="application/json",**self.auth()); self.assertEqual(api.status_code,200)
+        row.refresh_from_db(); self.assertEqual(row.proposed_windows,[w2]); self.assertGreaterEqual(row.server_version,2)
+        snap=AvailabilitySnapshot.objects.get(pk="ws_test"); self.assertEqual(snap.windows,[w2])
+        self.client.login(username="amil",password="test-pass-123")
+        self.assertEqual(self.client.post(reverse("corporate:portal_schedule",args=[row.id]),{"source_id":"W1"}).status_code,302)
+        row.refresh_from_db(); self.assertIsNone(row.schedule_request); self.assertEqual(row.status,"waiting_schedule")
+        self.assertEqual(self.client.post(reverse("corporate:portal_schedule",args=[row.id]),{"source_id":"W2"}).status_code,302)
+        row.refresh_from_db(); self.assertEqual(row.status,"schedule_requested"); self.assertEqual(row.schedule_request["sourceId"],"W2")
 
     def test_contract_exposes_only_public_schedule_projection(self):
         row=ServiceRequest.objects.create(id="SR2",external_request_id="AMIL-004",organization=self.org,workspace_id="ws_test",description="Teste",proposed_windows=[{"sourceId":"W2","date":"2026-08-29","start":"13:00","end":"15:00"}])
