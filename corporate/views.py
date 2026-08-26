@@ -28,6 +28,16 @@ def _membership(request):
     return PartnerMembership.objects.select_related("organization").filter(user=request.user, active=True, organization__active=True).first()
 
 
+def _window_key(window):
+    window = window or {}
+    return (
+        str(window.get("sourceId") or ""),
+        str(window.get("date") or ""),
+        str(window.get("start") or ""),
+        str(window.get("end") or ""),
+    )
+
+
 @require_GET
 def health(request):
     return JsonResponse({"ok": True, "service": "reparossjc-corporate", "version": 1, "time": timezone.now().isoformat()})
@@ -92,11 +102,33 @@ def operator_availability(request):
         windows = payload.get("windows")
         if not isinstance(windows, list):
             return JsonResponse({"detail": "windows must be a list"}, status=400)
-        snap, created = AvailabilitySnapshot.objects.get_or_create(workspace_id=workspace_id, defaults={"windows": windows[:100], "version": 1})
-        if not created:
-            snap.windows = windows[:100]
-            snap.version += 1
-            snap.save(update_fields=["windows", "version", "updated_at"])
+        public_windows = [
+            {
+                "sourceId": str(w.get("sourceId") or ""),
+                "date": str(w.get("date") or ""),
+                "start": str(w.get("start") or ""),
+                "end": str(w.get("end") or ""),
+            }
+            for w in windows[:100]
+            if isinstance(w, dict) and w.get("date") and w.get("start") and w.get("end")
+        ]
+        with transaction.atomic():
+            snap, created = AvailabilitySnapshot.objects.get_or_create(workspace_id=workspace_id, defaults={"windows": public_windows, "version": 1})
+            if not created:
+                if snap.windows != public_windows:
+                    snap.windows = public_windows
+                    snap.version += 1
+                    snap.save(update_fields=["windows", "version", "updated_at"])
+            # In R1, every request in waiting_schedule receives the provider's
+            # current published commercial windows. This makes an occupied slot
+            # disappear from the portal as soon as the app republishes availability.
+            next_windows = public_windows[:12]
+            waiting = ServiceRequest.objects.select_for_update().filter(workspace_id=workspace_id, status="waiting_schedule", schedule_request__isnull=True)
+            for row in waiting:
+                if row.proposed_windows != next_windows:
+                    row.proposed_windows = next_windows
+                    row.server_version += 1
+                    row.save(update_fields=["proposed_windows", "server_version", "updated_at"])
         return JsonResponse({"workspaceId": workspace_id, "version": snap.version, "windows": snap.windows, "updatedAt": snap.updated_at.isoformat()})
     return JsonResponse({"detail": "method not allowed"}, status=405)
 
@@ -170,7 +202,12 @@ def portal_schedule(request, request_id):
     source_id = request.POST.get("source_id", "").strip()
     chosen = next((w for w in (row.proposed_windows or []) if str(w.get("sourceId") or "") == source_id), None)
     if not chosen:
-        return HttpResponseBadRequest("Horário não está mais disponível")
+        messages.error(request, "Esse horário não está mais disponível. Escolha outra opção.")
+        return redirect("corporate:portal")
+    snap = AvailabilitySnapshot.objects.filter(pk=row.workspace_id or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", "")).first()
+    if snap is not None and _window_key(chosen) not in {_window_key(w) for w in (snap.windows or [])}:
+        messages.error(request, "Esse horário acabou de ficar indisponível. Escolha outra opção.")
+        return redirect("corporate:portal")
     row.schedule_request = {"sourceId": str(chosen.get("sourceId") or ""), "date": str(chosen.get("date") or ""), "start": str(chosen.get("start") or ""), "end": str(chosen.get("end") or "")}
     row.client_decision = "schedule_selected"; row.status = "schedule_requested"; row.server_version += 1
     row.save(update_fields=["schedule_request", "client_decision", "status", "server_version", "updated_at"])
