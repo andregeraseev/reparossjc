@@ -1,0 +1,23 @@
+import os
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand, CommandError
+from corporate.models import Organization, PartnerMembership
+
+
+class Command(BaseCommand):
+    help = "Create/update the Amil demo organization and its portal user from environment variables."
+
+    def handle(self, *args, **options):
+        username = os.environ.get("RSJC_AMIL_USERNAME", "").strip()
+        password = os.environ.get("RSJC_AMIL_PASSWORD", "")
+        email = os.environ.get("RSJC_AMIL_EMAIL", "").strip()
+        if not username or not password:
+            raise CommandError("RSJC_AMIL_USERNAME and RSJC_AMIL_PASSWORD are required")
+        org, _ = Organization.objects.update_or_create(id="org_amil_demo", defaults={"slug": "amil-demo", "name": "Amil", "display_name": "Amil", "demo": True, "active": True})
+        User = get_user_model()
+        user, created = User.objects.get_or_create(username=username, defaults={"email": email})
+        if email and user.email != email:
+            user.email = email
+        user.set_password(password); user.is_active = True; user.save()
+        PartnerMembership.objects.update_or_create(user=user, organization=org, defaults={"role": "manager", "active": True})
+        self.stdout.write(self.style.SUCCESS(f"Amil portal ready for user {username} ({'created' if created else 'updated'})"))
