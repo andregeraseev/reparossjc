@@ -119,16 +119,32 @@ def operator_availability(request):
                     snap.windows = public_windows
                     snap.version += 1
                     snap.save(update_fields=["windows", "version", "updated_at"])
-            # In R1, every request in waiting_schedule receives the provider's
-            # current published commercial windows. This makes an occupied slot
-            # disappear from the portal as soon as the app republishes availability.
+            # Um chamado aprovado entra em espera de agendamento quando o provedor
+            # publica opções. Chamados que já estão em waiting_schedule continuam
+            # acompanhando o snapshot para remover imediatamente horários ocupados.
             next_windows = public_windows[:12]
-            waiting = ServiceRequest.objects.select_for_update().filter(workspace_id=workspace_id, status="waiting_schedule", schedule_request__isnull=True)
-            for row in waiting:
+            eligible = ServiceRequest.objects.select_for_update().filter(
+                workspace_id=workspace_id,
+                client_decision="approved",
+                status__in=("quote_approved", "waiting_schedule"),
+                schedule_request__isnull=True,
+            )
+            for row in eligible:
+                # Sem nenhuma opção publicada, não avançamos um quote_approved para
+                # waiting_schedule; porém limpamos as opções de quem já aguardava.
+                if row.status == "quote_approved" and not next_windows:
+                    continue
+                changed_fields = []
                 if row.proposed_windows != next_windows:
                     row.proposed_windows = next_windows
+                    changed_fields.append("proposed_windows")
+                if row.status != "waiting_schedule":
+                    row.status = "waiting_schedule"
+                    changed_fields.append("status")
+                if changed_fields:
                     row.server_version += 1
-                    row.save(update_fields=["proposed_windows", "server_version", "updated_at"])
+                    changed_fields.extend(["server_version", "updated_at"])
+                    row.save(update_fields=changed_fields)
         return JsonResponse({"workspaceId": workspace_id, "version": snap.version, "windows": snap.windows, "updatedAt": snap.updated_at.isoformat()})
     return JsonResponse({"detail": "method not allowed"}, status=405)
 
