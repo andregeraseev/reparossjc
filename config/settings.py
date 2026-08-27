@@ -18,8 +18,8 @@ def _csv_env(name, default=""):
 
 ALLOWED_HOSTS = _csv_env("DJANGO_ALLOWED_HOSTS", "reparossjc.online,www.reparossjc.online,localhost,127.0.0.1,testserver")
 CSRF_TRUSTED_ORIGINS = _csv_env("DJANGO_CSRF_TRUSTED_ORIGINS", "https://reparossjc.online,https://www.reparossjc.online")
-INSTALLED_APPS = ["django.contrib.admin","django.contrib.auth","django.contrib.contenttypes","django.contrib.sessions","django.contrib.messages","django.contrib.staticfiles","meu_site","corporate"]
-MIDDLEWARE = ["django.middleware.security.SecurityMiddleware","django.contrib.sessions.middleware.SessionMiddleware","django.middleware.common.CommonMiddleware","django.middleware.csrf.CsrfViewMiddleware","django.contrib.auth.middleware.AuthenticationMiddleware","django.contrib.messages.middleware.MessageMiddleware","django.middleware.clickjacking.XFrameOptionsMiddleware"]
+INSTALLED_APPS = ["django.contrib.admin","django.contrib.auth","django.contrib.contenttypes","django.contrib.sessions","django.contrib.messages","django.contrib.staticfiles","meu_site","corporate","csp"]
+MIDDLEWARE = ["csp.middleware.CSPMiddleware","django.middleware.security.SecurityMiddleware","django.contrib.sessions.middleware.SessionMiddleware","django.middleware.common.CommonMiddleware","django.middleware.csrf.CsrfViewMiddleware","django.contrib.auth.middleware.AuthenticationMiddleware","django.contrib.messages.middleware.MessageMiddleware","django.middleware.clickjacking.XFrameOptionsMiddleware"]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{"BACKEND":"django.template.backends.django.DjangoTemplates","DIRS":[],"APP_DIRS":True,"OPTIONS":{"context_processors":["django.template.context_processors.request","django.contrib.auth.context_processors.auth","django.contrib.messages.context_processors.messages"]}}]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -45,3 +45,22 @@ CORPORATE_DEFAULT_WORKSPACE_ID = os.environ.get("RSJC_WORKSPACE_ID", "ws_reparos
 LOGIN_URL = "/corporativo/login/"
 LOGIN_REDIRECT_URL = "/corporativo/"
 LOGOUT_REDIRECT_URL = "/corporativo/login/"
+
+
+# CSP preservada do site Reparos SJC — django-csp 4.x
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": ("'self'",),
+        "script-src": (
+            "'self'",
+            "https://www.googletagmanager.com",
+            "https://www.google-analytics.com",
+        ),
+        "style-src": ("'self'", "'unsafe-inline'"),
+        "img-src": ("'self'", "data:", "https:"),
+        "font-src": ("'self'", "data:", "https:"),
+        "object-src": ("'none'",),
+        "base-uri": ("'self'",),
+        "frame-ancestors": ("'none'",),
+    }
+}

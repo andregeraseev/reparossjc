@@ -1,0 +1,343 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Segurança SJC | Câmeras e Fechaduras Inteligentes</title>
+  <meta name="description" content="Instalação de câmeras de segurança (CFTV) e fechaduras inteligentes/biometria em São José dos Campos. Orçamento rápido no WhatsApp." />
+
+  <link rel="icon" href="{% static 'favicon.ico' %}">
+  <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#111a2e;
+      --text:#e6eaf2;
+      --muted:#b7c0d6;
+      --brand:#25D366;
+      --brand2:#4aa3ff;
+      --border: rgba(255,255,255,.12);
+      --shadow: 0 18px 40px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica,Arial;
+      color:var(--text);
+      background:
+        radial-gradient(900px 600px at 15% 10%, rgba(74,163,255,.18), transparent 60%),
+        radial-gradient(900px 600px at 85% 0%, rgba(37,211,102,.16), transparent 55%),
+        var(--bg);
+      line-height:1.5;
+    }
+    a{color:inherit;text-decoration:none}
+    .container{width:min(1100px,92vw);margin:0 auto}
+
+    header{
+      position:sticky;top:0;z-index:10;
+      background: rgba(11,18,32,.72);
+      backdrop-filter: blur(12px);
+      border-bottom:1px solid var(--border);
+    }
+    .nav{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:12px 0;gap:14px;
+    }
+    .brand{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;
+    }
+    .brand img{height:46px;width:auto;display:block;object-fit:contain}
+    .pill{
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:7px 10px;
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      padding:12px 14px;border-radius:14px;
+      font-weight:800;border:1px solid var(--border);
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      white-space:nowrap;
+    }
+    .btn-primary{background:var(--brand);color:#08150d;border-color:transparent}
+    .btn-secondary{background:transparent;color:var(--text)}
+    nav ul{display:flex;gap:10px;list-style:none;margin:0;padding:0}
+    nav a{padding:8px 10px;border-radius:12px;color:var(--muted);font-size:14px}
+    nav a:hover{background: rgba(255,255,255,.06);color:var(--text)}
+
+    .hero{
+      padding:44px 0 18px;
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:18px;
+      align-items:stretch;
+    }
+    .hero h1{
+      margin:0 0 12px;
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing:-1px;
+      line-height:1.05;
+    }
+    .hero p{margin:0 0 16px;color:var(--muted);font-size:16px}
+    .hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+
+    .banner{
+      border:1px solid var(--border);
+      border-radius: calc(var(--radius) + 8px);
+      background:
+        linear-gradient(135deg, rgba(74,163,255,.18), rgba(37,211,102,.16)),
+        rgba(17,26,46,.55);
+      box-shadow: var(--shadow);
+      padding:18px;
+      position:relative;
+      overflow:hidden;
+    }
+    .banner::after{
+      content:"";
+      position:absolute;inset:-40px -80px auto auto;
+      width:240px;height:240px;border-radius:999px;
+      background: radial-gradient(circle, rgba(74,163,255,.35), transparent 60%);
+      filter: blur(2px);
+      transform: rotate(20deg);
+    }
+    .banner h3{margin:0 0 8px;font-size:16px}
+    .banner ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+    .kpi{
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:12px;
+      background: rgba(17,26,46,.55);
+    }
+    .kpi strong{display:block;font-size:16px}
+    .kpi span{color:var(--muted);font-size:12px}
+
+    section{padding:18px 0}
+    .section-title{display:flex;justify-content:space-between;gap:12px;align-items:end;margin-bottom:12px}
+    .section-title h2{margin:0;font-size:22px;letter-spacing:-.3px}
+    .section-title p{margin:0;color:var(--muted);font-size:14px}
+
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .card{
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(17,26,46,.55);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-top{
+      padding:16px;
+      background:
+        linear-gradient(135deg, rgba(74,163,255,.18), rgba(255,255,255,0)),
+        rgba(17,26,46,.35);
+      border-bottom:1px solid var(--border);
+    }
+    .card-top h3{margin:0 0 6px;font-size:16px}
+    .card-top p{margin:0;color:var(--muted);font-size:14px}
+    .card-body{padding:16px}
+    .list{display:grid;gap:10px;margin-top:10px}
+    .item{
+      border:1px solid var(--border);
+      border-radius: 14px;
+      padding:12px;
+      background: rgba(11,18,32,.45);
+      color: var(--muted);
+      font-size:14px;
+    }
+
+    .cta{
+      border:1px solid var(--border);
+      border-radius: calc(var(--radius) + 8px);
+      padding:18px;
+      background: linear-gradient(135deg, rgba(37,211,102,.18), rgba(74,163,255,.14));
+      display:flex;justify-content:space-between;align-items:center;gap:14px;
+    }
+    .cta h2{margin:0 0 6px;font-size:20px}
+    .cta p{margin:0;color:var(--muted);font-size:14px}
+
+    footer{padding:22px 0 80px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:14px}
+
+    /* smooth scroll + offset pro header */
+    html{scroll-behavior:smooth}
+    #servicos, #fechaduras, #como-funciona { scroll-margin-top: 90px; }
+
+    /* Mobile */
+    @media (max-width: 900px){
+      .hero-grid{grid-template-columns:1fr}
+      .kpis{grid-template-columns:1fr}
+      .grid-2{grid-template-columns:1fr}
+      nav ul{display:none}
+    }
+    @media (max-width: 520px){
+      .brand img{height:42px}
+      .cta{flex-direction:column;align-items:stretch}
+      .btn{width:100%}
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="container nav">
+    <div class="brand">
+      <a href="/" aria-label="Voltar para a página inicial">
+        <img src="{% static 'logo.png' %}" alt="Reparos SJC">
+      </a>
+      <a class="pill" href="tel:+5512981298667">📞 (12) 98129-8667</a>
+    </div>
+
+    <nav aria-label="Navegação">
+      <ul>
+        <li><a href="#servicos">Câmeras</a></li>
+        <li><a href="#fechaduras">Fechaduras</a></li>
+        <li><a href="#como-funciona">Como funciona</a></li>
+      </ul>
+    </nav>
+
+    <a class="btn btn-primary" href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Quero%20um%20or%C3%A7amento%20de%20instala%C3%A7%C3%A3o%20de%20c%C3%A2meras%20ou%20fechadura%20inteligente%20em%20SJC." target="_blank" rel="noopener noreferrer">
+      💬 Orçar no WhatsApp
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <h1>Segurança eletrônica em São José dos Campos</h1>
+        <p>Instalação profissional de <strong>câmeras (CFTV)</strong> e <strong>fechaduras inteligentes/biometria</strong>. Limpo, organizado e com orientação do melhor posicionamento.</p>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Quero%20or%C3%A7amento%20para%20seguran%C3%A7a%20eletr%C3%B4nica%20em%20SJC.%20Posso%20mandar%20fotos%20do%20local%3F" target="_blank" rel="noopener noreferrer">✅ Enviar fotos e pedir orçamento</a>
+          <a class="btn btn-secondary" href="/#servicos">🛠️ Voltar para Reparos</a>
+        </div>
+      </div>
+
+      <aside class="banner" aria-label="Destaques">
+        <h3>O que você ganha:</h3>
+        <ul>
+          <li>Ajuda na escolha do melhor ponto e ângulo</li>
+          <li>Acabamento limpo e discreto</li>
+          <li>Configuração básica e testes</li>
+        </ul>
+
+        <div class="kpis">
+          <div class="kpi"><strong>📍 SJC</strong><span>Atendimento local</span></div>
+          <div class="kpi"><strong>⚡ Rápido</strong><span>Agendamento fácil</span></div>
+          <div class="kpi"><strong>💬 Direto</strong><span>Orçamento no WhatsApp</span></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="servicos">
+    <div class="container">
+      <div class="section-title">
+        <h2>Câmeras de segurança (CFTV)</h2>
+        <p>Residências, comércios e áreas comuns</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-top">
+            <h3>Instalação + organização</h3>
+            <p>Fixação, passagem de cabos e acabamento discreto.</p>
+          </div>
+          <div class="card-body">
+            <div class="list">
+              <div class="item">📌 Ponto ideal de câmera (ângulo e altura)</div>
+              <div class="item">🔧 Instalação de DVR/NVR e fontes (quando houver)</div>
+              <div class="item">✅ Testes e conferência final</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <h3>Configuração básica</h3>
+            <p>Deixar funcionando e orientado pro uso.</p>
+          </div>
+          <div class="card-body">
+            <div class="list">
+              <div class="item">📱 Acesso no celular (quando compatível)</div>
+              <div class="item">🕒 Ajuste de data/hora e gravação</div>
+              <div class="item">🔔 Ajustes básicos de alertas (se tiver)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="fechaduras">
+    <div class="container">
+      <div class="section-title">
+        <h2>Fechaduras inteligentes e biometria</h2>
+        <p>Mais praticidade e controle de acesso</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-top">
+            <h3>Instalação com alinhamento</h3>
+            <p>Furação, ajuste e funcionamento suave.</p>
+          </div>
+          <div class="card-body">
+            <div class="list">
+              <div class="item">🚪 Ajuste de porta/contra-fecho</div>
+              <div class="item">🔩 Instalação e fixação correta</div>
+              <div class="item">✅ Teste de travamento/destravamento</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-top">
+            <h3>Cadastro e configuração</h3>
+            <p>Deixar pronto para uso.</p>
+          </div>
+          <div class="card-body">
+            <div class="list">
+              <div class="item">🧾 Cadastro de digitais/senhas (básico)</div>
+              <div class="item">📲 Pareamento no app (quando houver)</div>
+              <div class="item">🧠 Orientação rápida de uso</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="como-funciona">
+    <div class="container">
+      <div class="cta">
+        <div>
+          <h2>Quer orçamento rápido?</h2>
+          <p>Manda foto do local + bairro. Eu te respondo com uma noção e opções.</p>
+        </div>
+        <a class="btn btn-primary" href="https://wa.me/5512981298667?text=Ol%C3%A1!%20Quero%20or%C3%A7amento%20de%20c%C3%A2meras/fechadura%20inteligente%20em%20SJC.%20Segue%20foto%20e%20bairro:" target="_blank" rel="noopener noreferrer">
+          💬 Chamar no WhatsApp
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <strong>Reparos SJC</strong> • Segurança eletrônica em São José dos Campos • <a href="/" style="text-decoration:underline">Voltar</a>
+  </div>
+</footer>
+</body>
+</html>
