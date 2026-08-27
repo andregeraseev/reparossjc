@@ -41,7 +41,9 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
 X_FRAME_OPTIONS = "DENY"
 CORPORATE_OPERATOR_TOKEN = os.environ.get("RSJC_CORPORATE_OPERATOR_TOKEN", "").strip()
-CORPORATE_DEFAULT_WORKSPACE_ID = os.environ.get("RSJC_WORKSPACE_ID", "ws_reparos_sjc").strip()
+CORPORATE_DEFAULT_WORKSPACE_ID = os.environ.get("RSJC_WORKSPACE_ID", "").strip()
+if not CORPORATE_DEFAULT_WORKSPACE_ID and not DEBUG:
+    raise RuntimeError("RSJC_WORKSPACE_ID is required when DJANGO_DEBUG is disabled")
 LOGIN_URL = "/corporativo/login/"
 LOGIN_REDIRECT_URL = "/corporativo/"
 LOGOUT_REDIRECT_URL = "/corporativo/login/"
