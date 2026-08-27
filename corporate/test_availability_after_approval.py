@@ -94,7 +94,7 @@ class CorporateHardeningTests(TestCase):
     def test_stale_server_version_returns_409(self):
         row = self.approved("AMIL-CONFLICT")
         pkg = contract_for(row)
-        pkg["serviceRequest"]["_serverVersion"] = max(1, row.server_version - 1)
+        pkg["serviceRequest"]["_serverVersion"] = row.server_version + 99
         pkg["serviceRequest"]["status"] = "reviewing"
         response = self.client.post(
             reverse("corporate:operator_requests"),
