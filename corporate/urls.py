@@ -1,10 +1,19 @@
 from django.urls import path
 from . import views
+from .auth import _with_operator_cors
 
 app_name = "corporate"
 
+
+def _health_with_cors(request):
+    # O app Android usa uma página file:// dentro do WebView. Mesmo o GET simples
+    # de health é cross-origin e precisa de Access-Control-Allow-Origin para que
+    # fetch() consiga ler a resposta.
+    return _with_operator_cors(views.health(request))
+
+
 urlpatterns = [
-    path("api/corporate/v1/health", views.health, name="health"),
+    path("api/corporate/v1/health", _health_with_cors, name="health"),
     path("api/corporate/v1/operator/requests", views.operator_requests, name="operator_requests"),
     path("api/corporate/v1/operator/requests/<str:request_id>", views.operator_request_detail, name="operator_request_detail"),
     path("api/corporate/v1/operator/availability", views.operator_availability, name="operator_availability"),
