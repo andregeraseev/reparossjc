@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - run: python -m pip install --upgrade pip 'Django==5.2.11'
+      - run: python -m pip install --upgrade pip 'Django==5.2.11' 'django-csp>=4,<5'
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
@@ -33,10 +33,13 @@ jobs:
           s=Path('config/settings.py').read_text()
           v=Path('corporate/views.py').read_text()
           a=Path('corporate/auth.py').read_text()
+          u=Path('corporate/urls.py').read_text()
           assert 'DJANGO_SECRET_KEY' in s and 'CORPORATE_OPERATOR_TOKEN' in s
           assert 'django-insecure-' not in s
+          assert 'CONTENT_SECURITY_POLICY' in s
           assert 'ReparosSJC_Corporate_Request' in Path('corporate/services.py').read_text()
           assert 'hmac.compare_digest' in a
+          assert '_health_with_cors' in u and '_with_operator_cors' in u
           assert 'privateAgenda' not in v
           print('Corporate API R1 static gate OK')
           PY
