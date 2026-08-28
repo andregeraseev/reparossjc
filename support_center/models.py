@@ -6,7 +6,7 @@ from django.db import models
 
 class SupportAccount(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    account_key = models.CharField(max_length=120, unique=True, db_index=True)
+    account_key_hash = models.CharField(max_length=64, unique=True, db_index=True)
     workspace_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
     support_code = models.CharField(max_length=20, unique=True, db_index=True)
     display_name = models.CharField(max_length=160, blank=True, default="")
@@ -18,7 +18,7 @@ class SupportAccount(models.Model):
         ordering = ["-last_seen_at", "-created_at"]
 
     def __str__(self):
-        return f"{self.support_code} • {self.display_name or self.workspace_id or self.account_key}"
+        return f"{self.support_code} • {self.display_name or self.workspace_id or 'conta de suporte'}"
 
 
 class SupportDevice(models.Model):
