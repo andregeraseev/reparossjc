@@ -1,12 +1,16 @@
 # 00 — Continuidade Backend Reparos SJC — Corporate + Support R1
 
-**Atualizado em:** 28/08/2026  
-**Repositório:** `andregeraseev/reparossjc`  
-**Produção Corporate:** branch `corporate-api-r1`  
-**Desenvolvimento Support:** branch `support-r1`  
+**Atualizado em:** 28/08/2026
+
+**Repositório:** `andregeraseev/reparossjc`
+
+**Base Corporate:** branch `corporate-api-r1`
+
+**Código Support:** branch `support-r1`
+
 **Site:** `https://www.reparossjc.online/`
 
-> A produção Corporate API R1 Hardening1 já está implantada e funcionando. A branch `support-r1` é uma evolução isolada para a Central de Suporte e **NÃO está implantada em produção**. Não refaça o Corporate, não troque a produção de branch automaticamente e não habilite ingestão Support sem etapa controlada acompanhada pelo usuário.
+> A produção Corporate API R1 Hardening1 continua funcionando. A Central Support R1 Review4 foi implantada de forma controlada em 28/08/2026, na mesma instalação isolada, e está LIVE com ingestão habilitada. Não refaça o Corporate, não repita o deploy Support e não altere o kill switch sem uma nova etapa controlada acompanhada pelo usuário.
 
 ## Leia nesta ordem nesta branch
 1. `00_CONTINUIDADE_CORPORATE_API_R1.md`
@@ -37,11 +41,14 @@ Não voltar para `ws_reparos_sjc`, `amil-demo` ou `demo=True`.
 
 Não executar `git reset --hard`, `git clean`, reclone destrutivo, apagar rollback ou sobrescrever personalizações locais sem comparar deltas.
 
-# 2. Support R1 backend — estado atual
+# 2. Support R1 backend — LIVE
 Branch: `support-r1`.
 
-HEAD funcional/testado antes de futuros commits de documentação:
-`ed6c6202fd7cefe70127d47c476a29456a74c255`.
+Código implantado no PythonAnywhere:
+- diretório: `/home/AndreGeraseev/reparossjc_corporate_api_r1`;
+- branch local de implantação: `deploy-support-r1-20260828`;
+- commit implantado: `4a4ca987484b4480c92ad56f91ef413902e98284`;
+- base funcional Review4: `ed6c6202fd7cefe70127d47c476a29456a74c255`.
 
 CI autoritativo:
 - run `33168497303`;
@@ -83,7 +90,27 @@ A Central é `is_staff`, auditada e somente leitura do aparelho nesta fase.
 ## Kill switch
 `RSJC_SUPPORT_INGEST_ENABLED`.
 
-Quando houver deploy, produção deve começar com ingestão **DESLIGADA**.
+Estado confirmado após Reload e smoke final: **habilitado (`True`)**.
+
+### Implantação validada em 28/08/2026
+- backup pré-Support: `db.sqlite3.backup-pre-support-20260828-132054`;
+- SHA-256 do banco e do backup no momento da cópia: `3629e5de6709b690f7f8ac681bc92141eaa0e1c7228171e0ec4906f405ec2640`;
+- migration aplicada: `support_center.0001_initial`;
+- `manage.py check`: sem problemas;
+- `makemigrations --check --dry-run`: sem mudanças;
+- `PRAGMA integrity_check`: `ok`;
+- Central `/suporte/`: protegida e acessível por usuário dedicado `is_staff`;
+- smoke final: `/`, `/seguranca`, health Corporate, health Support e login Corporate retornaram 200;
+- `/suporte/` sem autenticação retornou 302 para login;
+- bootstrap vazio retornou 400, confirmando endpoint ativo e validando payload.
+
+### Piloto físico confirmado
+- Review5 instalada no Samsung SM-S911B, app 18.27/1827, Android 16, sem desinstalar;
+- código da conta piloto: `RSJC-MGHL-U85Q` — localizador, não senha;
+- importação offline, bootstrap online, envio manual e compartilhamento contínuo foram validados;
+- último estado observado: 42 eventos e 3 snapshots recebidos;
+- a fonte offline e o aparelho online aparecem como dois registros, comportamento esperado; não excluir o histórico offline;
+- fila local permanece com 24 itens pendentes e armazenamento com 9,5% livre; não limpar dados/fila antes do diagnóstico.
 
 # 3. App pareado atual — Support R1 Review5
 Repo: `andregeraseev/reparossjc-wear-`  
@@ -107,24 +134,20 @@ Ela corrige:
 
 Consultar o relatório no repo do app antes de qualquer mudança.
 
-# 4. Próxima ação — NÃO é deploy backend ainda
-Primeiro concluir a validação física do app Review5:
-1. confirmar qual build está instalado no aparelho;
-2. validar uma atualização segura da base física real para Review5, sem desinstalar;
-3. testar PDF real e IA com anotação curta + fotos;
-4. regressão Corporate completa;
-5. regressão local da área Support.
+# 4. Próxima ação
+Não mexer novamente na implantação Support. Prosseguir pelo app, em etapas curtas:
+1. testar fisicamente um PDF real com títulos longos e os novos cabeçalhos;
+2. testar IA com anotação curta + fotos, sem aceitar fatos críticos inventados;
+3. executar regressão Corporate completa;
+4. depois investigar, sem apagar, os 24 itens pendentes da fila local;
+5. liberar espaço no aparelho com cuidado, preservando dados do app.
 
-Somente depois, com aprovação física, preparar deploy Support controlado:
-1. backup SQLite da produção;
-2. revisar diff `corporate-api-r1 → support-r1`;
-3. `manage.py check` e migrations;
-4. manter Corporate e site público intactos;
-5. abrir `/suporte/` com login `is_staff`;
-6. manter `RSJC_SUPPORT_INGEST_ENABLED` desligado;
-7. validar telas e permissões;
-8. habilitar ingestão somente para um aparelho de teste;
-9. observar logs/volume/privacidade antes de ampliar.
+## Frente futura separada — múltiplas lojas/provedores
+- branch: `corporate-provider-routing-r1`;
+- commit remoto: `818e139bf10b2646d8f28c73ac7d0ecc0c8a03b1`;
+- CI run `33174687493`: **success**, 44 testes;
+- permite que cada loja veja apenas provedores autorizados e escolha exatamente um destinatário;
+- **não está implantada nem mesclada** em `support-r1`, `corporate-api-r1` ou produção.
 
 # 5. Secrets — nunca expor
 Nunca gravar em Git/log/docs/chat nem pedir ao usuário para colar:
@@ -137,11 +160,10 @@ Nunca gravar em Git/log/docs/chat nem pedir ao usuário para colar:
 - outras Secrets.
 
 # 6. Rollback
-Se uma futura implantação Support causar problema:
-- não apagar a pasta nova nem banco;
-- restaurar a configuração/WSGI Corporate anterior;
-- Reload;
-- investigar offline;
-- preservar a pasta antiga e backups.
+Se a implantação Support causar problema:
+- primeiro definir `RSJC_SUPPORT_INGEST_ENABLED=0` no ambiente privado e fazer Reload;
+- não apagar banco, fontes offline, pasta ativa ou backups;
+- se necessário restaurar a configuração/WSGI Corporate anterior;
+- investigar offline preservando evidências.
 
 Rollback não autoriza limpeza destrutiva.
