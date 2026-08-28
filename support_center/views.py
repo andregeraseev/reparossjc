@@ -1,12 +1,12 @@
 import hashlib
 import json
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
-from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -15,6 +15,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from .diagnostics import diagnose_account
 from .models import SupportAccessLog, SupportAccount, SupportCase, SupportDevice, SupportEvent, SupportSnapshot
+from .offline import import_offline_package
 from .services import (
     DeviceAlreadyRegistered,
     bootstrap_device,
@@ -289,6 +290,28 @@ def dashboard(request):
 
 
 @staff_member_required
+@require_POST
+def offline_import(request):
+    uploaded = request.FILES.get("diagnostic")
+    if not uploaded:
+        messages.error(request, "Selecione um pacote de diagnóstico JSON.")
+        return redirect("support_center:dashboard")
+    if uploaded.size > 1_048_576:
+        messages.error(request, "Pacote de diagnóstico maior que 1 MB.")
+        return redirect("support_center:dashboard")
+    try:
+        raw = uploaded.read()
+        payload = json.loads(raw.decode("utf-8"))
+        account, device, event_count = import_offline_package(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        messages.error(request, f"Pacote inválido: {exc}")
+        return redirect("support_center:dashboard")
+    _log_access(request, account, "offline_import", {"count": event_count, "status": "ok"})
+    messages.success(request, f"Diagnóstico offline importado: {event_count} evento(s).")
+    return redirect("support_center:account_detail", support_code=account.support_code)
+
+
+@staff_member_required
 def account_detail(request, support_code):
     account = get_object_or_404(SupportAccount, support_code=support_code)
     devices = list(account.devices.filter(active=True))
@@ -297,8 +320,32 @@ def account_detail(request, support_code):
         snap = device.snapshots.first()
         latest_snapshots[str(device.id)] = snap.data if snap else {}
         device.latest_snapshot = snap
-    events = list(account.events.select_related("device")[:250])
-    score, findings = diagnose_account(account, devices, latest_snapshots, events)
+
+    diagnostic_events = list(account.events.select_related("device")[:250])
+    score, findings = diagnose_account(account, devices, latest_snapshots, diagnostic_events)
+
+    severity = str(request.GET.get("severity") or "").strip().lower()
+    device_id = str(request.GET.get("device") or "").strip()
+    action = str(request.GET.get("action") or "").strip()[:80]
+    period = str(request.GET.get("period") or "24h").strip().lower()
+    events_qs = account.events.select_related("device")
+    if severity in {"info", "warn", "error"}:
+        events_qs = events_qs.filter(severity=severity)
+    else:
+        severity = ""
+    if device_id and account.devices.filter(pk=device_id).exists():
+        events_qs = events_qs.filter(device_id=device_id)
+    else:
+        device_id = ""
+    if action:
+        events_qs = events_qs.filter(action__icontains=action)
+    period_hours = {"24h": 24, "7d": 168, "30d": 720}.get(period)
+    if period_hours:
+        events_qs = events_qs.filter(occurred_at__gte=timezone.now() - timedelta(hours=period_hours))
+    else:
+        period = "all"
+    events = list(events_qs[:500])
+
     _log_access(request, account, "view_account", {"count": len(events)})
     return render(request, "support_center/account.html", {
         "account": account,
@@ -308,6 +355,7 @@ def account_detail(request, support_code):
         "score": score,
         "cases": account.cases.select_related("created_by")[:30],
         "access_logs": account.access_logs.select_related("user")[:20],
+        "filters": {"severity": severity, "device": device_id, "action": action, "period": period},
     })
 
 
