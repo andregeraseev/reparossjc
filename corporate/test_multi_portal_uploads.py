@@ -87,12 +87,12 @@ class MultiPortalUploadTests(TestCase):
 
         maintenance = self.client.get(reverse("corporate:portal_channel", args=["amil", "manutencao"]))
         self.assertContains(maintenance, "Amil Manutenção")
-        self.assertContains(maintenance, "AMIL-MAN")
-        self.assertNotContains(maintenance, "AMIL-JUR")
+        self.assertContains(maintenance, "<small>AMIL-MAN", html=False)
+        self.assertNotContains(maintenance, "<small>AMIL-JUR", html=False)
 
         legal = self.client.get(reverse("corporate:portal_channel", args=["amil", "juridico"]))
-        self.assertContains(legal, "AMIL-JUR")
-        self.assertNotContains(legal, "AMIL-MAN")
+        self.assertContains(legal, "<small>AMIL-JUR", html=False)
+        self.assertNotContains(legal, "<small>AMIL-MAN", html=False)
 
     def test_uploaded_image_is_private_and_reaches_only_assigned_provider(self):
         response = self.create_request()
