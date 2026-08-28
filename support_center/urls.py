@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/support/v1/events", views.api_events, name="api_events"),
     path("api/support/v1/snapshot", views.api_snapshot, name="api_snapshot"),
     path("suporte/", views.dashboard, name="dashboard"),
+    path("suporte/importar-diagnostico/", views.offline_import, name="offline_import"),
     path("suporte/<str:support_code>/", views.account_detail, name="account_detail"),
     path("suporte/<str:support_code>/novo-chamado/", views.case_create, name="case_create"),
     path("suporte/<str:support_code>/chamado/<int:case_id>/status/", views.case_status, name="case_status"),
