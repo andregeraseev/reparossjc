@@ -18,7 +18,7 @@ def _csv_env(name, default=""):
 
 ALLOWED_HOSTS = _csv_env("DJANGO_ALLOWED_HOSTS", "reparossjc.online,www.reparossjc.online,localhost,127.0.0.1,testserver")
 CSRF_TRUSTED_ORIGINS = _csv_env("DJANGO_CSRF_TRUSTED_ORIGINS", "https://reparossjc.online,https://www.reparossjc.online")
-INSTALLED_APPS = ["django.contrib.admin","django.contrib.auth","django.contrib.contenttypes","django.contrib.sessions","django.contrib.messages","django.contrib.staticfiles","meu_site","corporate","csp"]
+INSTALLED_APPS = ["django.contrib.admin","django.contrib.auth","django.contrib.contenttypes","django.contrib.sessions","django.contrib.messages","django.contrib.staticfiles","meu_site","corporate","support_center","csp"]
 MIDDLEWARE = ["csp.middleware.CSPMiddleware","django.middleware.security.SecurityMiddleware","django.contrib.sessions.middleware.SessionMiddleware","django.middleware.common.CommonMiddleware","django.middleware.csrf.CsrfViewMiddleware","django.contrib.auth.middleware.AuthenticationMiddleware","django.contrib.messages.middleware.MessageMiddleware","django.middleware.clickjacking.XFrameOptionsMiddleware"]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{"BACKEND":"django.template.backends.django.DjangoTemplates","DIRS":[],"APP_DIRS":True,"OPTIONS":{"context_processors":["django.template.context_processors.request","django.contrib.auth.context_processors.auth","django.contrib.messages.context_processors.messages"]}}]
@@ -44,6 +44,7 @@ CORPORATE_OPERATOR_TOKEN = os.environ.get("RSJC_CORPORATE_OPERATOR_TOKEN", "").s
 CORPORATE_DEFAULT_WORKSPACE_ID = os.environ.get("RSJC_WORKSPACE_ID", "").strip()
 if not CORPORATE_DEFAULT_WORKSPACE_ID and not DEBUG:
     raise RuntimeError("RSJC_WORKSPACE_ID is required when DJANGO_DEBUG is disabled")
+SUPPORT_INGEST_ENABLED = os.environ.get("RSJC_SUPPORT_INGEST_ENABLED", "1" if DEBUG else "0").strip().lower() in {"1", "true", "yes", "on"}
 LOGIN_URL = "/corporativo/login/"
 LOGIN_REDIRECT_URL = "/corporativo/"
 LOGOUT_REDIRECT_URL = "/corporativo/login/"
