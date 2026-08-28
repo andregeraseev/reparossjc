@@ -37,6 +37,9 @@ jobs:
           models=Path('support_center/models.py').read_text()
           urls=Path('support_center/urls.py').read_text()
           tests=Path('support_center/tests.py').read_text()
+          offline=Path('support_center/offline.py').read_text()
+          dashboard=Path('support_center/templates/support_center/dashboard.html').read_text()
+          account=Path('support_center/templates/support_center/account.html').read_text()
           assert 'RSJC_SUPPORT_INGEST_ENABLED' in settings
           assert '"1" if DEBUG else "0"' in settings
           assert 'staff_member_required' in views
@@ -56,8 +59,15 @@ jobs:
           assert 'corporateLastErrorCode' in services and '"corporateLastError"' not in services.split('"sync": pick',1)[1].split(')',1)[0]
           assert 'clientName' not in services
           assert 'photos' not in models.lower()
+          assert 'ReparosSJC_Support_Diagnostic' in offline
+          assert 'sanitize_snapshot' in offline and 'sanitize_detail' in offline
+          assert 'offline_import' in views and 'offline_import' in urls
+          assert 'multipart/form-data' in dashboard and '1 MB' in dashboard
+          assert 'filters' in account and 'severity' in account and 'period' in account
           assert 'test_support_account_is_not_keyed_by_workspace' in tests
           assert 'test_existing_device_requires_current_token_to_rotate' in tests
           assert 'test_payload_limit_rejects_oversized_bootstrap' in tests
+          assert 'test_staff_can_import_sanitized_offline_diagnostic' in tests
+          assert 'test_timeline_filters_by_severity_action_and_period' in tests
           print('Support R1 hardening security/static gate OK')
           PY
