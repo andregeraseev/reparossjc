@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import SupportAccessLog, SupportAccount, SupportDevice, SupportEvent, SupportSnapshot
+from .services import account_key_hash, purge_expired_support_data, sanitize_detail
 
 
 @override_settings(SUPPORT_INGEST_ENABLED=True)
@@ -36,6 +37,13 @@ class SupportApiTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertNotEqual(first.json()["supportCode"], second.json()["supportCode"])
         self.assertEqual(SupportAccount.objects.filter(workspace_id="ws_test_support").count(), 2)
+
+    def test_raw_account_key_is_not_stored(self):
+        raw = "sacct_private_12345678"
+        self.bootstrap(account_key=raw, installation_id="sinst_hash_12345678")
+        account = SupportAccount.objects.get()
+        self.assertEqual(account.account_key_hash, account_key_hash(raw))
+        self.assertNotIn(raw, account.account_key_hash)
 
     def test_existing_device_requires_current_token_to_rotate(self):
         first = self.bootstrap()
@@ -71,6 +79,11 @@ class SupportApiTests(TestCase):
         self.assertNotIn("stack", event.detail)
         self.assertNotIn("clientName", event.detail)
 
+    def test_route_sanitizer_removes_query_and_fragment(self):
+        detail = sanitize_detail({"route": "/operator/requests?id=secret#fragment", "httpStatus": 409})
+        self.assertEqual(detail["route"], "/operator/requests")
+        self.assertEqual(detail["httpStatus"], 409)
+
     def test_duplicate_events_are_reported_not_reinserted(self):
         boot = self.bootstrap().json()
         payload = {"events": [{"eventId": "sevt_dup_12345678", "action": "sync_ok", "entity": "sync", "detail": {"status": "ok"}}]}
@@ -102,18 +115,30 @@ class SupportApiTests(TestCase):
         self.assertNotIn("corporateLastError", data["sync"])
         self.assertNotIn("secret", data)
 
-    def test_consent_is_per_device(self):
+    def test_consent_is_per_device_and_snapshot_cannot_change_it(self):
         boot = self.bootstrap().json()
         response = self.client.post(
             reverse("support_center:api_consent"),
-            data=json.dumps({"continuousSharing": True, "privacyVersion": "support-r1"}),
+            data=json.dumps({"continuousSharing": True, "privacyVersion": "support-r1-review2"}),
             content_type="application/json",
             HTTP_X_SUPPORT_DEVICE_TOKEN=boot["deviceToken"],
         )
         self.assertEqual(response.status_code, 200)
         device = SupportDevice.objects.get()
         self.assertTrue(device.continuous_sharing)
-        self.assertIsNotNone(device.consent_updated_at)
+        consent_at = device.consent_updated_at
+
+        snapshot = self.client.post(
+            reverse("support_center:api_snapshot"),
+            data=json.dumps({"snapshot": {"support": {"continuousSharing": False, "privacyVersion": "forged"}}}),
+            content_type="application/json",
+            HTTP_X_SUPPORT_DEVICE_TOKEN=boot["deviceToken"],
+        )
+        self.assertEqual(snapshot.status_code, 200)
+        device.refresh_from_db()
+        self.assertTrue(device.continuous_sharing)
+        self.assertEqual(device.privacy_version, "support-r1-review2")
+        self.assertEqual(device.consent_updated_at, consent_at)
 
     def test_payload_limit_rejects_oversized_bootstrap(self):
         response = self.client.post(
@@ -128,14 +153,16 @@ class SupportCentralTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.staff = user_model.objects.create_user("supporter", password="safe-test-password", is_staff=True)
-        self.account = SupportAccount.objects.create(account_key="sacct_central_12345678", workspace_id="ws_central", support_code="RSJC-ABCD-EFGH", display_name="Oficina")
+        self.account = SupportAccount.objects.create(account_key_hash=account_key_hash("sacct_central_12345678"), workspace_id="ws_central", support_code="RSJC-ABCD-EFGH", display_name="Oficina")
 
-    def test_staff_can_search_open_and_is_audited(self):
+    def test_staff_can_search_open_and_is_audited_without_cache(self):
         self.client.force_login(self.staff)
         home = self.client.get(reverse("support_center:dashboard"), {"q": "ABCD"})
         self.assertContains(home, "RSJC-ABCD-EFGH")
+        self.assertIn("no-cache", home.headers.get("Cache-Control", ""))
         detail = self.client.get(reverse("support_center:account_detail", kwargs={"support_code": self.account.support_code}))
-        self.assertContains(detail, "Saúde")
+        self.assertContains(detail, "Saúde atual")
+        self.assertIn("no-cache", detail.headers.get("Cache-Control", ""))
         self.assertTrue(SupportAccessLog.objects.filter(account=self.account, user=self.staff, action="view_account").exists())
 
     def test_non_staff_is_redirected(self):
@@ -144,13 +171,14 @@ class SupportCentralTests(TestCase):
         response = self.client.get(reverse("support_center:dashboard"))
         self.assertEqual(response.status_code, 302)
 
-    def test_staff_can_import_sanitized_offline_diagnostic(self):
+    def test_staff_can_import_v3_sanitized_offline_diagnostic_without_raw_key(self):
         self.client.force_login(self.staff)
+        raw_account_key = "sacct_offline_12345678"
         payload = {
             "format": "ReparosSJC_Support_Diagnostic",
-            "version": 2,
+            "version": 3,
             "supportCode": "RSJC-WXYZ-2345",
-            "supportAccountKey": "sacct_offline_12345678",
+            "supportAccountHash": account_key_hash(raw_account_key),
             "installationId": "sinst_offline_12345678",
             "snapshot": {
                 "app": {"version": "18.27", "versionCode": 1827},
@@ -168,10 +196,11 @@ class SupportCentralTests(TestCase):
                 "detail": {"httpStatus": 409, "message": "nome privado", "stackSignature": "ux_v2.js:200:1"},
             }],
         }
+        self.assertNotIn("supportAccountKey", payload)
         upload = SimpleUploadedFile("diagnostico.json", json.dumps(payload).encode("utf-8"), content_type="application/json")
         response = self.client.post(reverse("support_center:offline_import"), {"diagnostic": upload})
         self.assertEqual(response.status_code, 302)
-        account = SupportAccount.objects.get(account_key="sacct_offline_12345678")
+        account = SupportAccount.objects.get(account_key_hash=account_key_hash(raw_account_key))
         self.assertEqual(account.support_code, "RSJC-WXYZ-2345")
         device = account.devices.get()
         self.assertEqual(device.platform, "offline")
@@ -182,11 +211,40 @@ class SupportCentralTests(TestCase):
         self.assertNotIn("message", event.detail)
         self.assertTrue(SupportAccessLog.objects.filter(account=account, user=self.staff, action="offline_import").exists())
 
-    def test_timeline_filters_by_severity_action_and_period(self):
+    def test_timeline_filters_and_groups_repeated_events(self):
         self.client.force_login(self.staff)
-        device = SupportDevice.objects.create(account=self.account, installation_id="sinst_filter_12345678", token_hash="a" * 64, model="S23")
-        SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_error_12345678", occurred_at=timezone.now(), action="corporate_sync_error", entity="sync", severity="error")
-        SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_info_12345678", occurred_at=timezone.now() - timedelta(days=10), action="backup_ok", entity="backup", severity="info")
+        device = SupportDevice.objects.create(account=self.account, installation_id="sinst_filter_12345678", token_hash="a" * 64, manufacturer="Samsung", model="S23", android_release="16", android_sdk=36, app_version="18.27", app_version_code=1827)
+        now = timezone.now()
+        for idx in range(2):
+            SupportEvent.objects.create(account=self.account, device=device, event_id=f"sevt_error_{idx}_12345678", occurred_at=now - timedelta(minutes=idx), action="corporate_sync_error", entity="sync", severity="error", detail={"httpStatus": 409})
+        SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_info_12345678", occurred_at=now - timedelta(days=10), action="backup_ok", entity="backup", severity="info")
         response = self.client.get(reverse("support_center:account_detail", kwargs={"support_code": self.account.support_code}), {"severity": "error", "action": "corporate", "period": "24h"})
         self.assertContains(response, "corporate_sync_error")
+        self.assertContains(response, "×2")
         self.assertNotContains(response, "backup_ok")
+        self.assertContains(response, "Copiar resumo técnico")
+
+    def test_health_is_per_device_and_current_device_drives_header(self):
+        self.client.force_login(self.staff)
+        old = SupportDevice.objects.create(account=self.account, installation_id="sinst_old_12345678", token_hash="b" * 64, model="Antigo", platform="android", android_sdk=36)
+        fresh = SupportDevice.objects.create(account=self.account, installation_id="sinst_new_12345678", token_hash="c" * 64, model="Atual", platform="android", android_sdk=36, app_version="18.27")
+        SupportDevice.objects.filter(pk=old.pk).update(last_seen_at=timezone.now() - timedelta(days=20))
+        SupportDevice.objects.filter(pk=fresh.pk).update(last_seen_at=timezone.now())
+        old.refresh_from_db(); fresh.refresh_from_db()
+        SupportSnapshot.objects.create(account=self.account, device=fresh, data={"backup": {"lastBackupAt": timezone.now().isoformat()}, "storage": {"freePercent": 60}, "sync": {"pendingCount": 0}})
+        response = self.client.get(reverse("support_center:account_detail", kwargs={"support_code": self.account.support_code}))
+        self.assertContains(response, "saúde atual baseada em Atual")
+        self.assertContains(response, "Antigo")
+        self.assertContains(response, "Atual")
+        self.assertContains(response, "saúde 100/100")
+
+    def test_retention_purge_removes_expired_telemetry(self):
+        device = SupportDevice.objects.create(account=self.account, installation_id="sinst_retention_12345678", token_hash="d" * 64, model="S23")
+        event = SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_old_12345678", occurred_at=timezone.now() - timedelta(days=100), action="old", entity="system")
+        snap = SupportSnapshot.objects.create(account=self.account, device=device, data={})
+        SupportSnapshot.objects.filter(pk=snap.pk).update(created_at=timezone.now() - timedelta(days=100))
+        result = purge_expired_support_data()
+        self.assertFalse(SupportEvent.objects.filter(pk=event.pk).exists())
+        self.assertFalse(SupportSnapshot.objects.filter(pk=snap.pk).exists())
+        self.assertGreaterEqual(result["events"], 1)
+        self.assertGreaterEqual(result["snapshots"], 1)
