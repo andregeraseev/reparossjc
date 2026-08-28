@@ -7,4 +7,5 @@ urlpatterns = [
     path("", home, name="home"),
     path("seguranca", seguranca, name="seguranca"),
     path("", include("corporate.urls")),
+    path("", include("support_center.urls")),
 ]
