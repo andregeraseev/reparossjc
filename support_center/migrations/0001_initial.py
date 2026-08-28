@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             name="SupportAccount",
             fields=[
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ("account_key", models.CharField(db_index=True, max_length=120, unique=True)),
+                ("account_key_hash", models.CharField(db_index=True, max_length=64, unique=True)),
                 ("workspace_id", models.CharField(blank=True, db_index=True, default="", max_length=100)),
                 ("support_code", models.CharField(db_index=True, max_length=20, unique=True)),
                 ("display_name", models.CharField(blank=True, default="", max_length=160)),
