@@ -1,192 +1,147 @@
-# 00 — Continuidade Corporate API R1
+# 00 — Continuidade Backend Reparos SJC — Corporate + Support R1
 
-**Atualizado em:** 27/08/2026 após E2E real e Hardening1 em produção  
+**Atualizado em:** 28/08/2026  
 **Repositório:** `andregeraseev/reparossjc`  
-**Branch:** `corporate-api-r1`  
-**Site/API:** `https://www.reparossjc.online/`
+**Produção Corporate:** branch `corporate-api-r1`  
+**Desenvolvimento Support:** branch `support-r1`  
+**Site:** `https://www.reparossjc.online/`
 
-> Este backend já está implantado em produção e o Corporate API R1 Hardening1 já foi atualizado/recarregado no PythonAnywhere. Não refaça o deploy do zero, não substitua a instalação antiga e não reverta o workspace/Amil para os valores antigos. Preserve rollback, segredos fora do Git e personalizações locais do site público.
+> A produção Corporate API R1 Hardening1 já está implantada e funcionando. A branch `support-r1` é uma evolução isolada para a Central de Suporte e **NÃO está implantada em produção**. Não refaça o Corporate, não troque a produção de branch automaticamente e não habilite ingestão Support sem etapa controlada acompanhada pelo usuário.
 
-## Leia nesta ordem
+## Leia nesta ordem nesta branch
 1. `00_CONTINUIDADE_CORPORATE_API_R1.md`
 2. `01_NOVO_CHAT_COMECE_AQUI.md`
-3. `DEPLOY_CORPORATE_API_PYTHONANYWHERE.md`
-4. `corporate/views.py`
-5. `corporate/services.py`
-6. `corporate/models.py`
-7. `corporate/tests.py`
-8. `corporate/test_availability_after_approval.py`
-9. `.github/workflows/test-corporate-api-r1.yml`
-10. no app Android: branch `v18.27-corporate-api-r1`, `00_CONTINUIDADE_REPAROS_SJC.md` e `qa/v18.27/RELATORIO_CORPORATE_HARDENING1.md`.
+3. arquivos `support_center/` e testes Support
+4. `.github/workflows/` relacionados a Support
+5. para contexto Corporate preservado: `corporate/views.py`, `corporate/services.py`, `corporate/models.py`, testes Corporate e `DEPLOY_CORPORATE_API_PYTHONANYWHERE.md`
+6. no app: `andregeraseev/reparossjc-wear-`, branch `v18.27-support-r1`, ler `AGENTS.md`, `00_CONTINUIDADE_REPAROS_SJC.md` e `qa/v18.27/RELATORIO_SUPPORT_R1_REVIEW5_PDF_AI.md`.
 
-# Estado de produção
-Deploy isolado no PythonAnywhere:
-- instalação antiga preservada: `/home/AndreGeraseev/reparossjc`;
-- instalação atual: `/home/AndreGeraseev/reparossjc_corporate_api_r1`;
+# 1. Corporate API R1 — LIVE e preservar
+Deploy atual no PythonAnywhere:
+- instalação antiga/rollback: `/home/AndreGeraseev/reparossjc`;
+- instalação Corporate atual: `/home/AndreGeraseev/reparossjc_corporate_api_r1`;
 - WSGI: `/var/www/www_reparossjc_online_wsgi.py`;
 - `project_home`: `/home/AndreGeraseev/reparossjc_corporate_api_r1`;
-- WSGI carrega `/home/AndreGeraseev/.rsjc_corporate_env.py` antes do Django;
-- backup do WSGI anterior existe;
-- pasta antiga não foi apagada e continua sendo rollback.
+- env privado: `/home/AndreGeraseev/.rsjc_corporate_env.py`, permissão 600.
 
-## Segredos
-Segredos de produção ficam somente em:
+Workspace canônico:
+`ws_d220bc64-2992-4c72-ab43-7d5c120c8946`.
 
-`/home/AndreGeraseev/.rsjc_corporate_env.py`
-
-Permissão: `600`.
-
-Nunca gravar valores secretos no Git/log/docs/chat e nunca pedir que o usuário cole:
-- `DJANGO_SECRET_KEY`;
-- `RSJC_CORPORATE_OPERATOR_TOKEN`;
-- `RSJC_AMIL_PASSWORD`;
-- keystore/senhas de assinatura;
-- outras Secrets.
-
-### Valores não secretos confirmados
-Workspace canônico de produção:
-
-`ws_d220bc64-2992-4c72-ab43-7d5c120c8946`
-
-Organização Amil:
+Amil em produção:
 - `slug=amil`;
 - `demo=False`.
 
-O valor antigo `ws_reparos_sjc` causou cenário **Online mas zero chamados** e não deve voltar como fallback silencioso de produção.
+O fluxo Portal Amil ↔ API ↔ Android já foi validado fisicamente até agendamento. O Corporate Hardening1 adicionou oferta explícita de horários, descarte de horários passados, reserva/concorrência de slots e conflito seguro por `_serverVersion` obsoleta.
 
-# E2E real já validado
-O fluxo Portal Amil ↔ API ↔ Android foi testado fisicamente até agendamento.
+Não voltar para `ws_reparos_sjc`, `amil-demo` ou `demo=True`.
 
-Chamado legado de teste: `AMIL-DEMO-20260826-222945`.
+Não executar `git reset --hard`, `git clean`, reclone destrutivo, apagar rollback ou sobrescrever personalizações locais sem comparar deltas.
 
-Confirmado:
-- portal criou chamado;
-- app recebeu chamado e campos;
-- app criou/vinculou orçamento;
-- orçamento foi enviado via POST real e apareceu no portal;
-- aprovação avançou o fluxo;
-- disponibilidade chegou ao backend;
-- após correções, horários chegaram ao portal;
-- fluxo avançou até agendamento.
+# 2. Support R1 backend — estado atual
+Branch: `support-r1`.
 
-Não voltar para JSON manual como fluxo principal.
-
-# Bugs de produção encontrados e corrigidos
-## CORS health/WebView
-`/health` foi ajustado para o Origin do WebView Android (`file://`/null), resolvendo `Failed to fetch` com backend saudável.
-
-## Workspace divergente
-Produção criava chamados no workspace antigo e o app consultava o UUID maduro. Foi corrigido o env e migrado o chamado existente. O usuário confirmou que o chamado passou a aparecer no celular.
-
-## Prefixo demo
-O bootstrap antigo deixava Amil como `amil-demo`, `demo=True`, gerando números `AMIL-DEMO-*`. O app Hotfix2b também foi corrigido para não bloquear um chamado real apenas pelo prefixo legado.
-
-## Disponibilidade não ligada ao chamado
-Diagnóstico mostrou snapshot com janelas e chamado aprovado sem `proposed_windows`. A correção inicial permitiu avançar até agendamento. O Hardening1 substituiu esse acoplamento automático por **oferta explícita por chamado**.
-
-# Corporate API R1 Hardening1
-Código funcional/testado antes dos commits de documentação:
-
-`dda6ae0ff0b7b5e5ef1690b1d4c06799b9f28ab1`
+HEAD funcional/testado antes de futuros commits de documentação:
+`ed6c6202fd7cefe70127d47c476a29456a74c255`.
 
 CI autoritativo:
-- workflow `Test Reparos SJC Corporate API R1`;
-- run `33068714283`;
+- run `33168497303`;
 - conclusão **success**;
-- 17 testes corporate passaram;
-- `manage.py check` passou;
-- `makemigrations --check --dry-run` sem deltas;
-- migrations em CI OK;
-- gate estático/security OK.
+- GitGuardian **success**.
 
-## Regras endurecidas
-### Oferta explícita
-Publicar o snapshot global de disponibilidade não move automaticamente todo chamado aprovado para `waiting_schedule`.
+## Objetivo
+Central interna `/suporte/` para a equipe localizar contas por código `RSJC-XXXX-XXXX` e diagnosticar:
+- aparelhos;
+- versão/app/Android;
+- saúde e armazenamento;
+- eventos técnicos sanitizados;
+- erros agrupados;
+- snapshots;
+- sincronização/backup;
+- histórico/timeline;
+- pacote de diagnóstico offline;
+- chamados internos de suporte.
 
-Para oferecer horários a um chamado, o operador/app envia explicitamente um subconjunto de janelas seguras para aquele chamado.
+A Central é `is_staff`, auditada e somente leitura do aparelho nesta fase.
 
-### Horários passados
-Backend descarta janelas passadas. App Hardening1 também filtra localmente.
+## Segurança/privacidade implementadas
+- código `RSJC-XXXX-XXXX` é localizador, não autenticação;
+- identidade da conta Support é independente do workspace comercial;
+- servidor persiste hash da identidade e hash do token, não valores brutos;
+- bootstrap repetido não pode substituir vínculo sem autenticação adequada;
+- consentimento é por aparelho;
+- snapshot não pode alterar consentimento;
+- ingestão `continuous` sem consentimento registrado no servidor é rejeitada com 403;
+- ingestão `manual`, disparada pelo usuário, permanece permitida;
+- telemetria aceita somente dados estruturados/sanitizados;
+- `action/entity` têm vocabulário técnico fechado;
+- textos livres sensíveis como `message`, `stack`, `reason`, nomes, endereços, telefones, fotos e objetos comerciais completos não devem ser persistidos;
+- limites de payload/rate limiting básico;
+- retenção de eventos/snapshots/auditoria;
+- pacote offline v3 sanitizado e importador com sanitização no servidor;
+- sem shell, JS remoto, localStorage remoto ou comandos arbitrários.
 
-### Reserva e concorrência
-Quando o portal escolhe um horário:
-- o slot é reservado para o chamado;
-- sai do snapshot disponível;
-- é removido das opções de outros chamados concorrentes;
-- nova publicação não pode reintroduzir silenciosamente o slot enquanto reservado.
+## Kill switch
+`RSJC_SUPPORT_INGEST_ENABLED`.
 
-### Estado obsoleto
-Contrato com `_serverVersion` obsoleta retorna conflito `409` em vez de sobrescrever estado novo do servidor.
+Quando houver deploy, produção deve começar com ingestão **DESLIGADA**.
 
-### Reabertura segura
-Operador pode limpar um `schedule_request` obsoleto e republicar o slot quando o fluxo é conscientemente reaberto.
-
-### Organização production-safe
-Uma organização já promovida para produção não pode ser rebaixada pelo upsert do operador para `demo=True`/`amil-demo`.
-
-# Atualização de produção Hardening1 — CONCLUÍDA
-O usuário executou update do clone de produção com backup SQLite prévio.
-
-Saída confirmada:
-
-```text
-System check identified no issues (0 silenced).
-Operations to perform:
-  Apply all migrations: admin, auth, contenttypes, corporate, sessions
-Running migrations:
-  No migrations to apply.
-Amil portal ready for user amil (updated)
-=== CORPORATE HARDENING OK ===
-workspace: ws_d220bc64-2992-4c72-ab43-7d5c120c8946
-organizacao: Amil
-slug: amil
-demo: False
-```
-
-Depois o usuário fez **Reload** na aba Web do PythonAnywhere e confirmou `Tudo certo`.
-
-Portanto o backend Hardening1 está **LIVE**. Não há ação de deploy backend pendente antes do próximo teste físico do app.
-
-# App correspondente
+# 3. App pareado atual — Support R1 Review5
 Repo: `andregeraseev/reparossjc-wear-`  
-Branch: `v18.27-corporate-api-r1`  
+Branch: `v18.27-support-r1`  
 Versão: `18.27` / `1827`.
 
-App Hardening1 build/gate commit antes dos commits de documentação:
-`b17c72354625f09862c0cbdc2997f219945c7cf7`
+A Review5 do app foi criada após inspeção de um PDF real e já está verde. Ela é uma mudança **app-only** sobre o Support R1 Review4; não exige nova alteração backend antes do teste físico.
 
-Workflow:
-`Build Reparos SJC 18.27 Corporate API R1 Hardening1`
+Workflow Review5:
+- run `33170755436`;
+- job `98847045795`;
+- **success**;
+- artifact ID `9685644132`;
+- artifact `ReparosSJC-v18.27-Support-R1-Review5-PDF-AI`;
+- mobile SHA-256 `5bfb7dba3a945724ae6dd9974db44cc42b538c6778b9c5632f363d9b76d7243f`.
 
-- run `33069438318`;
-- job `98507603066`;
-- success;
-- artifact `9645288248`;
-- artifact `ReparosSJC-v18.27-Corporate-API-R1-Hardening1`;
-- digest `sha256:43387516a1583c5409f32f8a203fe64a3e14d664f0e2b557491eb19ca8d32eeb`.
+Ela corrige:
+- títulos de fotos do PDF que invadiam colunas;
+- cabeçalhos `REGISTRO TÉCNICO`/`ENCERRAMENTO` visualmente desconexos;
+- regra de IA excessivamente conservadora para anotações curtas de serviço executado.
 
-**Estado físico atual:** o celular ainda está na Hotfix2b. O Hardening1 está pronto e passou teste de upgrade Hotfix2b → Hardening1 no Android 16, mas ainda não foi instalado pelo usuário depois do Reload do backend.
+Consultar o relatório no repo do app antes de qualquer mudança.
 
-# Próxima ação do projeto
-Não mexer no backend antes do teste salvo alguma falha real.
+# 4. Próxima ação — NÃO é deploy backend ainda
+Primeiro concluir a validação física do app Review5:
+1. confirmar qual build está instalado no aparelho;
+2. validar uma atualização segura da base física real para Review5, sem desinstalar;
+3. testar PDF real e IA com anotação curta + fotos;
+4. regressão Corporate completa;
+5. regressão local da área Support.
 
-1. Instalar o APK mobile Hardening1 por cima da Hotfix2b, sem desinstalar.
-2. Confirmar app Online e dados/token preservados.
-3. Criar novo chamado real no Portal Amil; número esperado agora `AMIL-*`, não `AMIL-DEMO-*`.
-4. E2E: chamado → orçamento → aprovação → seleção explícita de horários → portal escolhe → app revalida → agendamento maduro.
-5. Testar dois chamados concorrendo pelo mesmo slot.
-6. Testar estado stale/ocupado e esperar conflito seguro/republicação, nunca dupla marcação.
+Somente depois, com aprovação física, preparar deploy Support controlado:
+1. backup SQLite da produção;
+2. revisar diff `corporate-api-r1 → support-r1`;
+3. `manage.py check` e migrations;
+4. manter Corporate e site público intactos;
+5. abrir `/suporte/` com login `is_staff`;
+6. manter `RSJC_SUPPORT_INGEST_ENABLED` desligado;
+7. validar telas e permissões;
+8. habilitar ingestão somente para um aparelho de teste;
+9. observar logs/volume/privacidade antes de ampliar.
 
-# Personalizações locais do site público — IMPORTANTE
-A instalação antiga contém alterações locais não commitadas e stash `backup-pre-corporate-api-r1-20260826`. O deploy isolado preservou home, `/seguranca`, estáticos, favicon e CSP compatível com django-csp 4.x.
+# 5. Secrets — nunca expor
+Nunca gravar em Git/log/docs/chat nem pedir ao usuário para colar:
+- `DJANGO_SECRET_KEY`;
+- `RSJC_CORPORATE_OPERATOR_TOKEN`;
+- senha Amil;
+- Support device token;
+- keystore/senhas de assinatura;
+- `OPENAI_API_KEY`;
+- outras Secrets.
 
-**Não executar** `git reset --hard`, `git clean`, reclone destrutivo, apagar pasta antiga ou sobrescrever arquivos de produção sem comparar deltas locais.
+# 6. Rollback
+Se uma futura implantação Support causar problema:
+- não apagar a pasta nova nem banco;
+- restaurar a configuração/WSGI Corporate anterior;
+- Reload;
+- investigar offline;
+- preservar a pasta antiga e backups.
 
-# Rollback
-Se site quebrar por alteração futura:
-1. não apagar a nova pasta;
-2. restaurar WSGI anterior ou apontar `project_home` para `/home/AndreGeraseev/reparossjc`;
-3. Reload;
-4. investigar offline antes de nova virada.
-
-Rollback não autoriza apagar banco/arquivos nem limpar a instalação atual.
+Rollback não autoriza limpeza destrutiva.
