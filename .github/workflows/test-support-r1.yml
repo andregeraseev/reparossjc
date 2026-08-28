@@ -1,7 +1,7 @@
 name: Test Reparos SJC Support R1
 on:
   push:
-    branches: [support-r1, corporate-provider-routing-r1]
+    branches: [support-r1, corporate-provider-routing-r1, corporate-multi-portal-r1]
   workflow_dispatch:
 permissions:
   contents: read
@@ -123,5 +123,20 @@ jobs:
               assert 'request.corporate_workspace_id' in corporate_auth
               assert 'test_portal_rejects_forged_unauthorized_provider' in provider_tests
               assert 'test_provider_cannot_update_request_assigned_to_another_provider' in provider_tests
+          if Path('corporate/test_multi_portal_uploads.py').exists():
+              corporate_models=Path('corporate/models.py').read_text()
+              corporate_views=Path('corporate/views.py').read_text()
+              corporate_uploads=Path('corporate/uploads.py').read_text()
+              portal=Path('corporate/templates/corporate/portal.html').read_text()
+              upload_tests=Path('corporate/test_multi_portal_uploads.py').read_text()
+              assert 'class PortalChannel' in corporate_models
+              assert 'class ServiceRequestAttachment' in corporate_models
+              assert 'private_media' in settings and 'MEDIA_URL' not in settings
+              assert 'operator_attachment' in corporate_views and 'portal_attachment' in corporate_views
+              assert 'MAX_IMAGES_PER_REQUEST = 8' in corporate_uploads
+              assert 'MAX_TOTAL_BYTES = 24 * 1024 * 1024' in corporate_uploads
+              assert 'multipart/form-data' in portal and 'name="images"' in portal
+              assert 'test_unrelated_portal_user_cannot_read_attachment' in upload_tests
+              assert 'test_invalid_upload_is_rejected_without_creating_request' in upload_tests
           print('Support R1 Review2 security/static gate OK')
           PY

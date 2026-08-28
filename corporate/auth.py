@@ -18,6 +18,7 @@ def _with_operator_cors(response):
     response["Access-Control-Allow-Origin"] = "*"
     response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Workspace-ID, X-User-ID"
     response["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
+    response["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Length"
     response["Access-Control-Max-Age"] = "600"
     return response
 

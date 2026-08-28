@@ -80,6 +80,35 @@ class OrganizationProvider(models.Model):
         return f"{self.organization} → {self.provider}"
 
 
+class PortalChannel(models.Model):
+    """Named intake surface inside an organization (for example Amil Jurídico)."""
+
+    id = models.CharField(max_length=80, primary_key=True)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="portal_channels")
+    slug = models.SlugField(max_length=80)
+    display_name = models.CharField(max_length=160)
+    default_category = models.CharField(max_length=120, blank=True, default="Manutenção")
+    instructions = models.CharField(max_length=300, blank=True, default="")
+    default_provider = models.ForeignKey(
+        ServiceProvider,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="default_portal_channels",
+    )
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "display_name"]
+        constraints = [models.UniqueConstraint(fields=["organization", "slug"], name="uniq_org_portal_slug")]
+
+    def __str__(self):
+        return self.display_name
+
+
 class ServiceRequest(models.Model):
     STATUS_CHOICES = (
         ("new", "Novo"),
@@ -99,6 +128,13 @@ class ServiceRequest(models.Model):
     id = models.CharField(max_length=80, primary_key=True)
     external_request_id = models.CharField(max_length=120)
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="service_requests")
+    portal_channel = models.ForeignKey(
+        PortalChannel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="service_requests",
+    )
     provider = models.ForeignKey(
         ServiceProvider,
         null=True,
@@ -135,6 +171,35 @@ class ServiceRequest(models.Model):
 
     def __str__(self):
         return f"{self.organization.display_name} • {self.external_request_id}"
+
+
+def corporate_attachment_path(instance, filename):
+    suffix = (filename or "image.jpg").rsplit(".", 1)[-1].lower()
+    return f"corporate/{instance.service_request.organization_id}/{instance.service_request_id}/{instance.id}.{suffix}"
+
+
+class ServiceRequestAttachment(models.Model):
+    id = models.CharField(max_length=80, primary_key=True)
+    service_request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name="image_attachments")
+    file = models.FileField(upload_to=corporate_attachment_path, max_length=300)
+    display_name = models.CharField(max_length=120)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    checksum_sha256 = models.CharField(max_length=64, editable=False)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="corporate_attachments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.service_request_id} • {self.display_name}"
 
 
 class AvailabilitySnapshot(models.Model):

@@ -89,12 +89,40 @@ def public_provider(provider):
     }
 
 
+def public_portal_channel(channel):
+    if channel is None:
+        return None
+    return {
+        "id": channel.id,
+        "slug": channel.slug,
+        "displayName": channel.display_name,
+        "defaultCategory": channel.default_category,
+    }
+
+
+def public_attachments(row):
+    existing = list(row.attachments or [])
+    uploaded = [
+        {
+            "id": item.id,
+            "name": item.display_name,
+            "contentType": item.content_type,
+            "sizeBytes": item.size_bytes,
+            "downloadPath": f"/operator/attachments/{item.id}",
+            "source": "portal_upload",
+        }
+        for item in row.image_attachments.all()
+    ]
+    return existing + uploaded
+
+
 def public_request(row):
     return {
         "id": row.id,
         "externalRequestId": row.external_request_id,
         "organizationId": row.organization_id,
         "organizationName": row.organization.display_name,
+        "portalChannel": public_portal_channel(row.portal_channel),
         "providerId": row.provider_id or "",
         "providerName": row.provider.display_name if row.provider_id else "",
         "workspaceId": row.workspace_id,
@@ -103,7 +131,7 @@ def public_request(row):
         "category": row.category,
         "priority": row.priority,
         "description": row.description,
-        "attachments": row.attachments or [],
+        "attachments": public_attachments(row),
         "status": row.status,
         "clientDecision": row.client_decision,
         "providerLocalId": row.provider_local_id,
@@ -245,7 +273,13 @@ def upsert_from_contract(payload, *, provider=None, workspace_id=""):
     row.priority = str(req_payload.get("priority") or row.priority or "Normal")[:40]
     row.description = str(req_payload.get("description") if req_payload.get("description") is not None else row.description)
     if isinstance(req_payload.get("attachments"), list):
-        row.attachments = req_payload.get("attachments")
+        # Portal uploads are server-owned relational files. The Android client
+        # receives only their public metadata and must never mirror it back into
+        # the legacy JSON field (which would duplicate it or forge a download path).
+        row.attachments = [
+            item for item in req_payload.get("attachments")
+            if isinstance(item, dict) and item.get("source") != "portal_upload" and not item.get("downloadPath")
+        ]
     if request_id and request_id != row.id:
         row.provider_local_id = request_id[:80]
     elif req_payload.get("providerLocalId"):
