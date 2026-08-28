@@ -16,7 +16,8 @@ class Migration(migrations.Migration):
             name="SupportAccount",
             fields=[
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ("workspace_id", models.CharField(db_index=True, max_length=100, unique=True)),
+                ("account_key", models.CharField(db_index=True, max_length=120, unique=True)),
+                ("workspace_id", models.CharField(blank=True, db_index=True, default="", max_length=100)),
                 ("support_code", models.CharField(db_index=True, max_length=20, unique=True)),
                 ("display_name", models.CharField(blank=True, default="", max_length=160)),
                 ("active", models.BooleanField(default=True)),
@@ -30,7 +31,7 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ("installation_id", models.CharField(max_length=120)),
-                ("token_hash", models.CharField(max_length=64)),
+                ("token_hash", models.CharField(db_index=True, max_length=64, unique=True)),
                 ("platform", models.CharField(blank=True, default="android", max_length=32)),
                 ("manufacturer", models.CharField(blank=True, default="", max_length=80)),
                 ("model", models.CharField(blank=True, default="", max_length=120)),
@@ -38,6 +39,9 @@ class Migration(migrations.Migration):
                 ("android_sdk", models.PositiveIntegerField(default=0)),
                 ("app_version", models.CharField(blank=True, default="", max_length=40)),
                 ("app_version_code", models.PositiveBigIntegerField(default=0)),
+                ("continuous_sharing", models.BooleanField(default=False)),
+                ("privacy_version", models.CharField(blank=True, default="support-r1", max_length=40)),
+                ("consent_updated_at", models.DateTimeField(blank=True, null=True)),
                 ("active", models.BooleanField(default=True)),
                 ("first_seen_at", models.DateTimeField(auto_now_add=True)),
                 ("last_seen_at", models.DateTimeField(auto_now=True)),
@@ -87,6 +91,18 @@ class Migration(migrations.Migration):
             ],
             options={"ordering": ["-updated_at"]},
         ),
+        migrations.CreateModel(
+            name="SupportAccessLog",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("action", models.CharField(max_length=60)),
+                ("detail", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("account", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="access_logs", to="support_center.supportaccount")),
+                ("user", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="support_access_logs", to=settings.AUTH_USER_MODEL)),
+            ],
+            options={"ordering": ["-created_at"]},
+        ),
         migrations.AddConstraint(model_name="supportdevice", constraint=models.UniqueConstraint(fields=("account", "installation_id"), name="uniq_support_account_installation")),
         migrations.AddConstraint(model_name="supportevent", constraint=models.UniqueConstraint(fields=("device", "event_id"), name="uniq_support_device_event")),
         migrations.AddIndex(model_name="supportdevice", index=models.Index(fields=["account", "last_seen_at"], name="support_cen_account_b9a75e_idx")),
@@ -95,4 +111,5 @@ class Migration(migrations.Migration):
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["account", "-occurred_at"], name="support_cen_account_1ecf8a_idx")),
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["device", "-occurred_at"], name="support_cen_device__412473_idx")),
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["action", "-occurred_at"], name="support_cen_action_f7e527_idx")),
+        migrations.AddIndex(model_name="supportaccesslog", index=models.Index(fields=["account", "-created_at"], name="support_cen_account_9ec2bf_idx")),
     ]
