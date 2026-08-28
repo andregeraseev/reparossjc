@@ -111,5 +111,5 @@ class Migration(migrations.Migration):
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["account", "-occurred_at"], name="support_cen_account_1ecf8a_idx")),
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["device", "-occurred_at"], name="support_cen_device__412473_idx")),
         migrations.AddIndex(model_name="supportevent", index=models.Index(fields=["action", "-occurred_at"], name="support_cen_action_f7e527_idx")),
-        migrations.AddIndex(model_name="supportaccesslog", index=models.Index(fields=["account", "-created_at"], name="support_cen_account_9ec2bf_idx")),
+        migrations.AddIndex(model_name="supportaccesslog", index=models.Index(fields=["account", "-created_at"], name="support_cen_account_ebaf43_idx")),
     ]
