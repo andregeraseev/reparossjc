@@ -5,6 +5,7 @@ import secrets
 from django.db import transaction
 from django.utils import timezone
 
+from .event_policy import normalize_event_action, normalize_event_entity
 from .models import SupportAccount, SupportDevice, SupportEvent, SupportSnapshot
 from .services import (
     account_key_hash,
@@ -14,7 +15,6 @@ from .services import (
     prune_device_data,
     safe_account_hash,
     safe_identifier,
-    safe_label,
     sanitize_detail,
     sanitize_snapshot,
     token_hash,
@@ -110,10 +110,8 @@ def import_offline_package(payload):
                 event_id = safe_identifier(raw.get("eventId"), prefix="eventId")
             except ValueError:
                 continue
-            action = safe_label(raw.get("action"), 100)
-            entity = safe_label(raw.get("entity") or "system", 80)
-            if not action:
-                continue
+            action = normalize_event_action(raw.get("action"))
+            entity = normalize_event_entity(raw.get("entity"))
             severity = str(raw.get("severity") or "info").lower()
             if severity not in {"info", "warn", "error"}:
                 severity = "info"
