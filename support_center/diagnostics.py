@@ -23,6 +23,14 @@ def _score(findings):
     return max(0, value)
 
 
+def select_primary_device(devices):
+    device_list = list(devices)
+    if not device_list:
+        return None
+    online_devices = [device for device in device_list if device.platform != "offline"]
+    return (online_devices or device_list)[0]
+
+
 def diagnose_device(device, snapshot, recent_events):
     findings = []
     now = timezone.now()
@@ -127,8 +135,8 @@ def diagnose_device(device, snapshot, recent_events):
 
 
 def diagnose_account(account, devices, latest_snapshots, recent_events):
-    device_list = list(devices)
-    if not device_list:
+    primary = select_primary_device(devices)
+    if primary is None:
         findings = [{
             "severity": "error",
             "code": "NO_DEVICE",
@@ -136,10 +144,6 @@ def diagnose_account(account, devices, latest_snapshots, recent_events):
             "detail": "A conta ainda não concluiu o cadastro de suporte.",
             "recommendation": "Abrir Ajustes → Suporte no aparelho e atualizar o código.",
         }]
-        return _score(findings), findings, None
-
-    online_devices = [device for device in device_list if device.platform != "offline"]
-    primary = (online_devices or device_list)[0]
+        return _score(findings), findings
     primary_events = [event for event in recent_events if event.device_id == primary.id]
-    score, findings = diagnose_device(primary, latest_snapshots.get(str(primary.id)) or {}, primary_events)
-    return score, findings, primary
+    return diagnose_device(primary, latest_snapshots.get(str(primary.id)) or {}, primary_events)
