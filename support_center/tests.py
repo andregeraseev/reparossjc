@@ -1,8 +1,11 @@
 import json
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import SupportAccessLog, SupportAccount, SupportDevice, SupportEvent, SupportSnapshot
 
@@ -140,3 +143,50 @@ class SupportCentralTests(TestCase):
         self.client.force_login(user)
         response = self.client.get(reverse("support_center:dashboard"))
         self.assertEqual(response.status_code, 302)
+
+    def test_staff_can_import_sanitized_offline_diagnostic(self):
+        self.client.force_login(self.staff)
+        payload = {
+            "format": "ReparosSJC_Support_Diagnostic",
+            "version": 2,
+            "supportCode": "RSJC-WXYZ-2345",
+            "supportAccountKey": "sacct_offline_12345678",
+            "installationId": "sinst_offline_12345678",
+            "snapshot": {
+                "app": {"version": "18.27", "versionCode": 1827},
+                "device": {"manufacturer": "Samsung", "model": "S23", "androidRelease": "16", "androidSdk": 36},
+                "workspace": {"workspaceId": "ws_same_commercial"},
+                "sync": {"pendingCount": 2, "corporateLastErrorCode": "HTTP_409"},
+                "secret": {"token": "never"},
+            },
+            "events": [{
+                "eventId": "sevt_offline_12345678",
+                "occurredAt": timezone.now().isoformat(),
+                "action": "corporate_sync_error",
+                "entity": "sync",
+                "severity": "error",
+                "detail": {"httpStatus": 409, "message": "nome privado", "stackSignature": "ux_v2.js:200:1"},
+            }],
+        }
+        upload = SimpleUploadedFile("diagnostico.json", json.dumps(payload).encode("utf-8"), content_type="application/json")
+        response = self.client.post(reverse("support_center:offline_import"), {"diagnostic": upload})
+        self.assertEqual(response.status_code, 302)
+        account = SupportAccount.objects.get(account_key="sacct_offline_12345678")
+        self.assertEqual(account.support_code, "RSJC-WXYZ-2345")
+        device = account.devices.get()
+        self.assertEqual(device.platform, "offline")
+        self.assertTrue(device.installation_id.startswith("offline_"))
+        self.assertEqual(account.snapshots.count(), 1)
+        event = account.events.get()
+        self.assertEqual(event.detail["httpStatus"], 409)
+        self.assertNotIn("message", event.detail)
+        self.assertTrue(SupportAccessLog.objects.filter(account=account, user=self.staff, action="offline_import").exists())
+
+    def test_timeline_filters_by_severity_action_and_period(self):
+        self.client.force_login(self.staff)
+        device = SupportDevice.objects.create(account=self.account, installation_id="sinst_filter_12345678", token_hash="a" * 64, model="S23")
+        SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_error_12345678", occurred_at=timezone.now(), action="corporate_sync_error", entity="sync", severity="error")
+        SupportEvent.objects.create(account=self.account, device=device, event_id="sevt_info_12345678", occurred_at=timezone.now() - timedelta(days=10), action="backup_ok", entity="backup", severity="info")
+        response = self.client.get(reverse("support_center:account_detail", kwargs={"support_code": self.account.support_code}), {"severity": "error", "action": "corporate", "period": "24h"})
+        self.assertContains(response, "corporate_sync_error")
+        self.assertNotContains(response, "backup_ok")
