@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .models import SupportAccount, SupportDevice, SupportEvent, SupportSnapshot
+from .models import SupportAccessLog, SupportAccount, SupportDevice, SupportEvent, SupportSnapshot
 
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,120}$")
+_SAFE_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_LABEL_RE = re.compile(r"[^A-Za-z0-9._:-]+")
 _ALLOWED_DETAIL_KEYS = {
     "id", "recordId", "requestId", "quoteId", "jobId", "taskId", "batchId", "sourceId",
@@ -27,6 +28,18 @@ class DeviceAlreadyRegistered(ValueError):
 
 def token_hash(token):
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
+def account_key_hash(account_key):
+    clean = safe_identifier(account_key, prefix="accountKey")
+    return hashlib.sha256(clean.encode("utf-8")).hexdigest()
+
+
+def safe_account_hash(value):
+    raw = str(value or "").strip().lower()
+    if not _SAFE_HASH_RE.fullmatch(raw):
+        raise ValueError("invalid supportAccountHash")
+    return raw
 
 
 def generate_support_code():
@@ -75,6 +88,11 @@ def _safe_float(value, default=0.0, minimum=0.0, maximum=1_000_000_000.0):
     return min(maximum, max(minimum, parsed))
 
 
+def _safe_route(value):
+    route = str(value or "").split("?", 1)[0].split("#", 1)[0]
+    return clean_text(route, 180)
+
+
 def sanitize_detail(detail):
     if not isinstance(detail, dict):
         return {}
@@ -87,7 +105,10 @@ def sanitize_detail(detail):
         elif isinstance(value, (int, float)):
             out[key] = value
         elif isinstance(value, str):
-            out[key] = clean_text(value, 600 if key == "stackSignature" else 260)
+            if key == "route":
+                out[key] = _safe_route(value)
+            else:
+                out[key] = clean_text(value, 600 if key == "stackSignature" else 260)
     return out
 
 
@@ -155,14 +176,14 @@ def parse_client_datetime(value):
 
 
 def bootstrap_device(*, account_key, workspace_id, installation_id, display_name="", device_info=None, current_token=""):
-    account_key = safe_identifier(account_key, prefix="accountKey")
+    hashed_account_key = account_key_hash(account_key)
     installation_id = safe_identifier(installation_id, prefix="installationId")
     workspace_id = safe_label(workspace_id, 100)
     display_name = clean_text(display_name, 160)
 
     with transaction.atomic():
-        account, created = SupportAccount.objects.select_for_update().get_or_create(
-            account_key=account_key,
+        account, _created = SupportAccount.objects.select_for_update().get_or_create(
+            account_key_hash=hashed_account_key,
             defaults={
                 "support_code": generate_support_code(),
                 "workspace_id": workspace_id,
@@ -202,7 +223,8 @@ def bootstrap_device(*, account_key, workspace_id, installation_id, display_name
     return account, device, token
 
 
-def prune_device_data(device, *, max_events=3000, max_snapshots=50, max_event_days=90):
+def prune_device_data(device, *, max_events=3000, max_snapshots=50, max_event_days=90, max_snapshot_days=90):
+    now = timezone.now()
     event_ids = list(
         SupportEvent.objects.filter(device=device)
         .order_by("-occurred_at", "-id")
@@ -210,7 +232,7 @@ def prune_device_data(device, *, max_events=3000, max_snapshots=50, max_event_da
     )
     if event_ids:
         SupportEvent.objects.filter(id__in=event_ids).delete()
-    SupportEvent.objects.filter(device=device, occurred_at__lt=timezone.now() - timedelta(days=max_event_days)).delete()
+    SupportEvent.objects.filter(device=device, occurred_at__lt=now - timedelta(days=max_event_days)).delete()
 
     snapshot_ids = list(
         SupportSnapshot.objects.filter(device=device)
@@ -219,3 +241,16 @@ def prune_device_data(device, *, max_events=3000, max_snapshots=50, max_event_da
     )
     if snapshot_ids:
         SupportSnapshot.objects.filter(id__in=snapshot_ids).delete()
+    SupportSnapshot.objects.filter(device=device, created_at__lt=now - timedelta(days=max_snapshot_days)).delete()
+
+
+def purge_expired_support_data(*, event_days=90, snapshot_days=90, access_days=180):
+    now = timezone.now()
+    event_deleted, _ = SupportEvent.objects.filter(occurred_at__lt=now - timedelta(days=event_days)).delete()
+    snapshot_deleted, _ = SupportSnapshot.objects.filter(created_at__lt=now - timedelta(days=snapshot_days)).delete()
+    access_deleted, _ = SupportAccessLog.objects.filter(created_at__lt=now - timedelta(days=access_days)).delete()
+    return {
+        "events": event_deleted,
+        "snapshots": snapshot_deleted,
+        "accessLogs": access_deleted,
+    }
