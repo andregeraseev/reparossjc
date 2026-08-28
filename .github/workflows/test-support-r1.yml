@@ -1,0 +1,117 @@
+name: Test Reparos SJC Support R1
+on:
+  push:
+    branches: [support-r1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_DEBUG: '1'
+      DJANGO_SECRET_KEY: 'ci-only-secret-key-not-production'
+      DJANGO_ALLOWED_HOSTS: 'localhost,127.0.0.1,testserver'
+      DJANGO_SECURE_SSL_REDIRECT: '0'
+      DJANGO_HSTS_SECONDS: '0'
+      RSJC_CORPORATE_OPERATOR_TOKEN: 'test-operator-token'
+      RSJC_WORKSPACE_ID: 'ws_test'
+      RSJC_SUPPORT_INGEST_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip 'Django==5.2.11' 'django-csp>=4,<5'
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py migrate --noinput
+      - run: python manage.py purge_support_data
+      - run: python manage.py test corporate support_center -v 2
+      - name: Support Review2 security contract checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          settings=Path('config/settings.py').read_text()
+          views=Path('support_center/views.py').read_text()
+          services=Path('support_center/services.py').read_text()
+          models=Path('support_center/models.py').read_text()
+          urls=Path('support_center/urls.py').read_text()
+          tests=Path('support_center/tests.py').read_text()
+          offline=Path('support_center/offline.py').read_text()
+          review2=Path('support_center/review2.py').read_text()
+          central2=Path('support_center/central_review2.py').read_text()
+          diagnostics=Path('support_center/diagnostics.py').read_text()
+          dashboard=Path('support_center/templates/support_center/dashboard.html').read_text()
+          account=Path('support_center/templates/support_center/account.html').read_text()
+          central_js=Path('support_center/static/support_center/central.js').read_text()
+          purge=Path('support_center/management/commands/purge_support_data.py').read_text()
+
+          assert 'RSJC_SUPPORT_INGEST_ENABLED' in settings
+          assert '"1" if DEBUG else "0"' in settings
+          assert 'staff_member_required' in views and 'staff_member_required' in central2
+          assert 'X-Support-Device-Token' in views
+          assert 'secrets.compare_digest' in views
+          assert 'PayloadTooLarge' in views and 'too many requests' in views
+          assert 'api_consent' in views and 'api_consent' in urls
+          assert 'SupportAccessLog' in views and 'SupportAccessLog' in models
+
+          # Pseudonymous support identity: raw account key never persists server-side.
+          assert 'account_key_hash = models.CharField(max_length=64, unique=True, db_index=True)' in models
+          assert 'account_key = models.CharField' not in models
+          assert 'def account_key_hash' in services and 'def safe_account_hash' in services
+          assert 'account_key_hash=hashed_account_key' in services
+          assert 'workspace_id = models.CharField(max_length=100, blank=True, default="", db_index=True)' in models
+          assert 'token_hash = models.CharField(max_length=64, unique=True, db_index=True)' in models
+          assert 'DeviceAlreadyRegistered' in services
+
+          # Ingest is strict and contains no arbitrary support log messages.
+          assert 'prune_device_data' in services and 'purge_expired_support_data' in services
+          assert 'stackSignature' in services
+          allowed=services.split('_ALLOWED_DETAIL_KEYS = {',1)[1].split('}',1)[0]
+          assert '"message"' not in allowed and '"stack"' not in allowed and '"reason"' not in allowed
+          assert 'split("?", 1)' in services and 'split("#", 1)' in services
+          assert 'corporateLastErrorCode' in services
+          assert 'clientName' not in services
+          assert 'photos' not in models.lower()
+
+          # Explicit consent is a separate boundary; snapshots cannot mutate it.
+          assert 'telemetry can never mutate consent state' in review2
+          assert 'continuous_sharing' not in review2
+          assert 'review2.api_snapshot' in urls
+
+          # Offline package v3 links by hash, while v2 is accepted only for backward compatibility.
+          assert 'ReparosSJC_Support_Diagnostic' in offline
+          assert 'version not in {2, 3}' in offline
+          assert 'supportAccountHash' in offline
+          assert 'sanitize_snapshot' in offline and 'sanitize_detail' in offline
+          assert 'offline_import' in views and 'offline_import' in urls
+          assert 'multipart/form-data' in dashboard and '1 MB' in dashboard
+
+          # Central diagnostics and UX improvements.
+          assert 'def diagnose_device' in diagnostics and 'def select_primary_device' in diagnostics
+          assert 'corporateLastErrorCode' in diagnostics and 'freePercent' in diagnostics and 'lowStorage' in diagnostics
+          assert 'def group_events' in central2 and 'def technical_summary' in central2
+          assert '@never_cache' in central2
+          assert 'data-copy-target' in account and 'central.js' in account
+          assert 'navigator.clipboard' in central_js
+          assert 'Saúde atual' in account and 'Erros e eventos recorrentes' in account
+          assert 'filters' in account and 'severity' in account and 'period' in account
+          assert 'purge_expired_support_data' in purge
+
+          # Regression tests must explicitly cover the security contract.
+          for marker in (
+              'test_support_account_is_not_keyed_by_workspace',
+              'test_raw_account_key_is_not_stored',
+              'test_existing_device_requires_current_token_to_rotate',
+              'test_route_sanitizer_removes_query_and_fragment',
+              'test_consent_is_per_device_and_snapshot_cannot_change_it',
+              'test_payload_limit_rejects_oversized_bootstrap',
+              'test_staff_can_import_v3_sanitized_offline_diagnostic_without_raw_key',
+              'test_timeline_filters_and_groups_repeated_events',
+              'test_health_is_per_device_and_current_device_drives_header',
+              'test_retention_purge_removes_expired_telemetry',
+          ):
+              assert marker in tests
+          print('Support R1 Review2 security/static gate OK')
+          PY
