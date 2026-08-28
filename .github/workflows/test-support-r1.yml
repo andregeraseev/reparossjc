@@ -1,0 +1,48 @@
+name: Test Reparos SJC Support R1
+on:
+  push:
+    branches: [support-r1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_DEBUG: '1'
+      DJANGO_SECRET_KEY: 'ci-only-secret-key-not-production'
+      DJANGO_ALLOWED_HOSTS: 'localhost,127.0.0.1,testserver'
+      DJANGO_SECURE_SSL_REDIRECT: '0'
+      DJANGO_HSTS_SECONDS: '0'
+      RSJC_CORPORATE_OPERATOR_TOKEN: 'test-operator-token'
+      RSJC_WORKSPACE_ID: 'ws_test'
+      RSJC_SUPPORT_INGEST_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip 'Django==5.2.11' 'django-csp>=4,<5'
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py migrate --noinput
+      - run: python manage.py test corporate support_center -v 2
+      - name: Support security contract checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          settings=Path('config/settings.py').read_text()
+          views=Path('support_center/views.py').read_text()
+          services=Path('support_center/services.py').read_text()
+          models=Path('support_center/models.py').read_text()
+          assert 'RSJC_SUPPORT_INGEST_ENABLED' in settings
+          assert 'staff_member_required' in views
+          assert 'X-Support-Device-Token' in views
+          assert 'secrets.compare_digest' in views
+          assert 'sanitize_detail' in views and 'sanitize_snapshot' in views
+          assert 'token_hash' in models and 'deviceToken' not in models
+          assert 'Bearer [redacted]' in services
+          assert 'clientName' not in services
+          assert 'photos' not in models.lower()
+          print('Support R1 security/static gate OK')
+          PY
