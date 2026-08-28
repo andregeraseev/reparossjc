@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 
 from . import views as base
 from .models import SupportSnapshot
+from .secure_ingest import ingest_mode
 from .services import clean_text, prune_device_data, sanitize_snapshot
 
 
@@ -21,8 +22,11 @@ def api_snapshot(request):
         return base._json({"detail": "too many requests"}, status=429)
     try:
         data = base._json_body(request, 65_536)
+        mode = ingest_mode(data, device)
     except base.PayloadTooLarge as exc:
         return base._json({"detail": str(exc)}, status=413)
+    except PermissionError as exc:
+        return base._json({"detail": str(exc), "code": "CONTINUOUS_SHARING_DISABLED"}, status=403)
     except ValueError as exc:
         return base._json({"detail": str(exc)}, status=400)
 
@@ -31,4 +35,9 @@ def api_snapshot(request):
     app_version = clean_text((clean.get("app") or {}).get("version"), 40)
     base._touch(device, app_version=app_version)
     prune_device_data(device)
-    return base._json({"ok": True, "supportCode": device.account.support_code, "serverTime": base.timezone.now().isoformat()})
+    return base._json({
+        "ok": True,
+        "mode": mode,
+        "supportCode": device.account.support_code,
+        "serverTime": base.timezone.now().isoformat(),
+    })
