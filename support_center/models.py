@@ -6,7 +6,8 @@ from django.db import models
 
 class SupportAccount(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workspace_id = models.CharField(max_length=100, unique=True, db_index=True)
+    account_key = models.CharField(max_length=120, unique=True, db_index=True)
+    workspace_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
     support_code = models.CharField(max_length=20, unique=True, db_index=True)
     display_name = models.CharField(max_length=160, blank=True, default="")
     active = models.BooleanField(default=True)
@@ -17,14 +18,14 @@ class SupportAccount(models.Model):
         ordering = ["-last_seen_at", "-created_at"]
 
     def __str__(self):
-        return f"{self.support_code} • {self.display_name or self.workspace_id}"
+        return f"{self.support_code} • {self.display_name or self.workspace_id or self.account_key}"
 
 
 class SupportDevice(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.ForeignKey(SupportAccount, on_delete=models.CASCADE, related_name="devices")
     installation_id = models.CharField(max_length=120)
-    token_hash = models.CharField(max_length=64)
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
     platform = models.CharField(max_length=32, blank=True, default="android")
     manufacturer = models.CharField(max_length=80, blank=True, default="")
     model = models.CharField(max_length=120, blank=True, default="")
@@ -32,6 +33,9 @@ class SupportDevice(models.Model):
     android_sdk = models.PositiveIntegerField(default=0)
     app_version = models.CharField(max_length=40, blank=True, default="")
     app_version_code = models.PositiveBigIntegerField(default=0)
+    continuous_sharing = models.BooleanField(default=False)
+    privacy_version = models.CharField(max_length=40, blank=True, default="support-r1")
+    consent_updated_at = models.DateTimeField(null=True, blank=True)
     active = models.BooleanField(default=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
@@ -105,3 +109,18 @@ class SupportCase(models.Model):
 
     def __str__(self):
         return f"{self.account.support_code} • {self.title}"
+
+
+class SupportAccessLog(models.Model):
+    account = models.ForeignKey(SupportAccount, on_delete=models.CASCADE, related_name="access_logs")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_access_logs")
+    action = models.CharField(max_length=60)
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["account", "-created_at"])]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.account.support_code} • {self.user} • {self.action}"
