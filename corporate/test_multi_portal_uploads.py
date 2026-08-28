@@ -26,14 +26,21 @@ class MultiPortalUploadTests(TestCase):
         self.addCleanup(self.media.cleanup)
 
         self.organization = Organization.objects.create(id="org_amil", slug="amil", name="Amil", display_name="Amil")
-        self.provider = ServiceProvider.objects.create(
-            id="provider_reparos",
+        self.provider, _ = ServiceProvider.objects.get_or_create(
             slug="reparos-sjc",
-            name="Reparos SJC",
-            display_name="Reparos SJC",
-            workspace_id="ws_reparos",
-            operator_token_hash=hashlib.sha256(b"provider-token-123456789").hexdigest(),
+            defaults={
+                "id": "provider_reparos",
+                "name": "Reparos SJC",
+                "display_name": "Reparos SJC",
+                "workspace_id": "ws_reparos",
+            },
         )
+        self.provider.name = "Reparos SJC"
+        self.provider.display_name = "Reparos SJC"
+        self.provider.workspace_id = "ws_reparos"
+        self.provider.operator_token_hash = hashlib.sha256(b"provider-token-123456789").hexdigest()
+        self.provider.active = True
+        self.provider.save()
         OrganizationProvider.objects.create(organization=self.organization, provider=self.provider, active=True, is_default=True)
         self.maintenance = PortalChannel.objects.create(
             id="PC_MAINT",
