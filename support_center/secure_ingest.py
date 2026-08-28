@@ -7,6 +7,21 @@ from .models import SupportEvent
 from .services import clean_text, parse_client_datetime, prune_device_data, safe_identifier, sanitize_detail
 
 
+def ingest_mode(data, device):
+    """Return manual/continuous and enforce server-side consent for background telemetry.
+
+    Missing mode is treated as manual for backward compatibility with Review3 and older
+    clients. A future or buggy client cannot use the continuous channel while the server's
+    per-device consent flag is off.
+    """
+    mode = str(data.get("mode") or "manual").strip().lower()
+    if mode not in {"manual", "continuous"}:
+        raise ValueError("invalid support ingest mode")
+    if mode == "continuous" and not device.continuous_sharing:
+        raise PermissionError("continuous support sharing is not enabled")
+    return mode
+
+
 @csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
 def api_events(request):
@@ -21,8 +36,11 @@ def api_events(request):
         return base._json({"detail": "too many requests"}, status=429)
     try:
         data = base._json_body(request, 262_144)
+        mode = ingest_mode(data, device)
     except base.PayloadTooLarge as exc:
         return base._json({"detail": str(exc)}, status=413)
+    except PermissionError as exc:
+        return base._json({"detail": str(exc), "code": "CONTINUOUS_SHARING_DISABLED"}, status=403)
     except ValueError as exc:
         return base._json({"detail": str(exc)}, status=400)
 
@@ -69,5 +87,6 @@ def api_events(request):
     return base._json({
         "accepted": len(objects),
         "duplicates": len(prepared) - len(objects),
+        "mode": mode,
         "serverTime": base.timezone.now().isoformat(),
     })
