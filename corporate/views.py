@@ -14,7 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .auth import operator_api_required
-from .models import AvailabilitySnapshot, PartnerMembership, ServiceRequest
+from .models import AvailabilitySnapshot, OrganizationProvider, PartnerMembership, ServiceRequest
 from .services import (
     ConflictError,
     contract_for,
@@ -37,6 +37,16 @@ def _membership(request):
     return PartnerMembership.objects.select_related("organization").filter(user=request.user, active=True, organization__active=True).first()
 
 
+def _provider_links(organization):
+    return list(
+        OrganizationProvider.objects.filter(
+            organization=organization,
+            active=True,
+            provider__active=True,
+        ).select_related("provider")
+    )
+
+
 def _reserved_window_keys(workspace_id, exclude_request_id=None):
     qs = ServiceRequest.objects.filter(
         workspace_id=workspace_id,
@@ -56,11 +66,12 @@ def health(request):
 @csrf_exempt
 @operator_api_required
 def operator_requests(request):
+    workspace = request.corporate_workspace_id
+    provider = request.corporate_provider
     if request.method == "GET":
-        qs = ServiceRequest.objects.select_related("organization").all()
-        workspace = request.GET.get("workspace_id", "").strip()
-        if workspace:
-            qs = qs.filter(workspace_id=workspace)
+        qs = ServiceRequest.objects.select_related("organization", "provider").filter(workspace_id=workspace)
+        if provider is not None:
+            qs = qs.filter(provider=provider)
         updated_after = request.GET.get("updated_after", "").strip()
         if updated_after:
             try:
@@ -73,8 +84,10 @@ def operator_requests(request):
         try:
             payload = _json_body(request)
             with transaction.atomic():
-                row = upsert_from_contract(payload)
+                row = upsert_from_contract(payload, provider=provider, workspace_id=workspace)
             return JsonResponse(contract_for(row))
+        except PermissionError as exc:
+            return JsonResponse({"detail": str(exc)}, status=403)
         except ConflictError as exc:
             return JsonResponse({"detail": str(exc)}, status=409)
         except ValueError as exc:
@@ -85,15 +98,22 @@ def operator_requests(request):
 @csrf_exempt
 @operator_api_required
 def operator_request_detail(request, request_id):
-    row = get_object_or_404(ServiceRequest.objects.select_related("organization"), pk=request_id)
+    workspace = request.corporate_workspace_id
+    provider = request.corporate_provider
+    rows = ServiceRequest.objects.select_related("organization", "provider").filter(workspace_id=workspace)
+    if provider is not None:
+        rows = rows.filter(provider=provider)
+    row = get_object_or_404(rows, pk=request_id)
     if request.method == "GET":
         return JsonResponse(contract_for(row))
     if request.method in {"PUT", "POST"}:
         try:
             payload = _json_body(request)
             with transaction.atomic():
-                updated = upsert_from_contract(payload)
+                updated = upsert_from_contract(payload, provider=provider, workspace_id=workspace)
             return JsonResponse(contract_for(updated))
+        except PermissionError as exc:
+            return JsonResponse({"detail": str(exc)}, status=403)
         except ConflictError as exc:
             return JsonResponse({"detail": str(exc)}, status=409)
         except ValueError as exc:
@@ -104,9 +124,7 @@ def operator_request_detail(request, request_id):
 @csrf_exempt
 @operator_api_required
 def operator_availability(request):
-    workspace_id = request.headers.get("X-Workspace-ID", "").strip() or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", "")
-    if not workspace_id:
-        return JsonResponse({"detail": "workspace is required"}, status=400)
+    workspace_id = request.corporate_workspace_id
     if request.method == "GET":
         snap = AvailabilitySnapshot.objects.filter(pk=workspace_id).first()
         windows = normalize_public_windows(snap.windows if snap else [], limit=100, require_future=True)
@@ -171,8 +189,17 @@ def portal_home(request):
     membership = _membership(request)
     if not membership:
         return render(request, "corporate/no_access.html", status=403)
-    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization")[:100]
-    return render(request, "corporate/portal.html", {"membership": membership, "organization": membership.organization, "requests": rows})
+    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization", "provider")[:100]
+    return render(
+        request,
+        "corporate/portal.html",
+        {
+            "membership": membership,
+            "organization": membership.organization,
+            "requests": rows,
+            "provider_links": _provider_links(membership.organization),
+        },
+    )
 
 
 @login_required
@@ -182,6 +209,17 @@ def portal_create(request):
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
     org = membership.organization
+    provider_links = _provider_links(org)
+    provider_id = request.POST.get("provider_id", "").strip()
+    provider_link = next((link for link in provider_links if link.provider_id == provider_id), None)
+    if provider_link is None and not provider_id:
+        provider_link = next((link for link in provider_links if link.is_default), None)
+        if provider_link is None and len(provider_links) == 1:
+            provider_link = provider_links[0]
+    if provider_link is None:
+        messages.error(request, "Selecione um prestador autorizado para enviar o chamado.")
+        return redirect("corporate:portal")
+    provider = provider_link.provider
     external = request.POST.get("external_request_id", "").strip()
     if not external:
         external = f"{org.slug.upper()[:12]}-{timezone.localtime().strftime('%Y%m%d-%H%M%S')}"
@@ -193,7 +231,8 @@ def portal_create(request):
         id=new_request_id(),
         external_request_id=external[:120],
         organization=org,
-        workspace_id=getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", ""),
+        provider=provider,
+        workspace_id=provider.workspace_id,
         location={"label": location_label, "address": request.POST.get("address", "").strip()},
         requester={
             "name": request.POST.get("requester_name", "").strip() or request.user.get_full_name() or request.user.username,
@@ -205,7 +244,7 @@ def portal_create(request):
         description=request.POST.get("description", "").strip(),
         status="new",
     )
-    messages.success(request, f"Chamado {row.external_request_id} enviado para a Reparos SJC.")
+    messages.success(request, f"Chamado {row.external_request_id} enviado para {provider.display_name}.")
     return redirect("corporate:portal")
 
 
@@ -227,7 +266,8 @@ def portal_approve(request, request_id):
         row.proposed_windows = []
         row.server_version += 1
         row.save(update_fields=["client_decision", "status", "proposed_windows", "server_version", "updated_at"])
-    messages.success(request, "Orçamento aprovado. Aguardando a Reparos SJC oferecer horários.")
+    provider_name = row.provider.display_name if row.provider_id else "o prestador"
+    messages.success(request, f"Orçamento aprovado. Aguardando {provider_name} oferecer horários.")
     return redirect("corporate:portal")
 
 
@@ -297,7 +337,8 @@ def portal_schedule(request, request_id):
                 other.server_version += 1
                 other.save(update_fields=["proposed_windows", "server_version", "updated_at"])
 
-    messages.success(request, "Horário solicitado e reservado temporariamente. A Reparos SJC fará a confirmação final.")
+    provider_name = row.provider.display_name if row.provider_id else "O prestador"
+    messages.success(request, f"Horário solicitado e reservado temporariamente. {provider_name} fará a confirmação final.")
     return redirect("corporate:portal")
 
 
@@ -307,5 +348,5 @@ def portal_requests_api(request):
     membership = _membership(request)
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
-    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization")[:100]
+    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization", "provider")[:100]
     return JsonResponse({"requests": [contract_for(row) for row in rows], "serverTime": timezone.now().isoformat()})

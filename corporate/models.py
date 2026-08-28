@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class Organization(models.Model):
@@ -34,6 +35,51 @@ class PartnerMembership(models.Model):
         return f"{self.user} @ {self.organization}"
 
 
+class ServiceProvider(models.Model):
+    """A provider app/workspace that can receive Corporate requests."""
+
+    id = models.CharField(max_length=64, primary_key=True)
+    slug = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=160)
+    display_name = models.CharField(max_length=160)
+    workspace_id = models.CharField(max_length=80, unique=True, db_index=True)
+    operator_token_hash = models.CharField(max_length=64, blank=True, default="", editable=False)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_name"]
+
+    def __str__(self):
+        return self.display_name
+
+
+class OrganizationProvider(models.Model):
+    """Explicit allow-list of providers an organization may select."""
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="provider_links")
+    provider = models.ForeignKey(ServiceProvider, on_delete=models.CASCADE, related_name="organization_links")
+    active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "provider__display_name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "provider"], name="uniq_org_provider"),
+            models.UniqueConstraint(
+                fields=["organization"],
+                condition=Q(active=True, is_default=True),
+                name="uniq_active_default_provider_per_org",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.organization} → {self.provider}"
+
+
 class ServiceRequest(models.Model):
     STATUS_CHOICES = (
         ("new", "Novo"),
@@ -53,6 +99,13 @@ class ServiceRequest(models.Model):
     id = models.CharField(max_length=80, primary_key=True)
     external_request_id = models.CharField(max_length=120)
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="service_requests")
+    provider = models.ForeignKey(
+        ServiceProvider,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="service_requests",
+    )
     workspace_id = models.CharField(max_length=80, blank=True, default="")
     location = models.JSONField(default=dict, blank=True)
     requester = models.JSONField(default=dict, blank=True)
@@ -74,7 +127,11 @@ class ServiceRequest(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         constraints = [models.UniqueConstraint(fields=["organization", "external_request_id"], name="uniq_org_external_request")]
-        indexes = [models.Index(fields=["workspace_id", "updated_at"]), models.Index(fields=["organization", "status"])]
+        indexes = [
+            models.Index(fields=["workspace_id", "updated_at"]),
+            models.Index(fields=["provider", "updated_at"], name="corporate_s_provide_c402ad_idx"),
+            models.Index(fields=["organization", "status"]),
+        ]
 
     def __str__(self):
         return f"{self.organization.display_name} • {self.external_request_id}"

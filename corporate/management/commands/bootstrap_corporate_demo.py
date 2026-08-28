@@ -3,7 +3,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
-from corporate.models import Organization, PartnerMembership
+from corporate.models import Organization, OrganizationProvider, PartnerMembership, ServiceProvider
 
 
 class Command(BaseCommand):
@@ -39,5 +39,23 @@ class Command(BaseCommand):
             user=user,
             organization=org,
             defaults={"role": "manager", "active": True},
+        )
+        workspace_id = os.environ.get("RSJC_WORKSPACE_ID", "").strip()
+        if not workspace_id:
+            raise CommandError("RSJC_WORKSPACE_ID is required")
+        provider, _ = ServiceProvider.objects.update_or_create(
+            id="provider_reparos_sjc",
+            defaults={
+                "slug": "reparos-sjc",
+                "name": "Reparos SJC",
+                "display_name": "Reparos SJC",
+                "workspace_id": workspace_id,
+                "active": True,
+            },
+        )
+        OrganizationProvider.objects.update_or_create(
+            organization=org,
+            provider=provider,
+            defaults={"active": True, "is_default": True, "sort_order": 0},
         )
         self.stdout.write(self.style.SUCCESS(f"Amil portal ready for user {username} ({'created' if created else 'updated'})"))

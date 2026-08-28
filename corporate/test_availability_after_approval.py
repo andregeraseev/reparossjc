@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import AvailabilitySnapshot, Organization, PartnerMembership, ServiceRequest
+from .models import AvailabilitySnapshot, Organization, OrganizationProvider, PartnerMembership, ServiceProvider, ServiceRequest
 from .services import contract_for
 
 
@@ -23,6 +23,20 @@ class CorporateHardeningTests(TestCase):
         )
         user = get_user_model().objects.create_user(username="amil", password="test-pass-123")
         PartnerMembership.objects.create(user=user, organization=self.org, role="manager")
+        self.provider, _ = ServiceProvider.objects.get_or_create(
+            workspace_id="ws_test",
+            defaults={
+                "id": "provider_test",
+                "slug": "prestador-teste",
+                "name": "Prestador Teste",
+                "display_name": "Prestador Teste",
+            },
+        )
+        OrganizationProvider.objects.update_or_create(
+            organization=self.org,
+            provider=self.provider,
+            defaults={"active": True, "is_default": True},
+        )
 
     def auth(self):
         return {

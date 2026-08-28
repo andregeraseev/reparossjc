@@ -13,9 +13,17 @@
 <main class="wrap">
 {% if messages %}<div class="messages">{% for message in messages %}<div class="msg">{{ message }}</div>{% endfor %}</div>{% endif %}
 <section class="panel">
-<h2>Novo chamado</h2><p class="help">Envie o pedido diretamente para a equipe da Reparos SJC.</p>
+<h2>Novo chamado</h2><p class="help">Escolha um prestador autorizado e envie o pedido diretamente para ele.</p>
 <form method="post" action="{% url 'corporate:portal_create' %}">{% csrf_token %}
 <label>Número interno (opcional)</label><input name="external_request_id" placeholder="Ex.: AMIL-24581">
+<label>Enviar para</label>
+{% if provider_links %}
+<select name="provider_id" required>
+{% for link in provider_links %}<option value="{{ link.provider_id }}"{% if link.is_default %} selected{% endif %}>{{ link.provider.display_name }}</option>{% endfor %}
+</select>
+{% else %}
+<div class="waiting">Nenhum prestador está autorizado para esta loja. Solicite a liberação ao administrador.</div>
+{% endif %}
 <label>Local</label><input name="location" required placeholder="Ex.: Flat 03 — Jardim Oriente">
 <label>Endereço</label><input name="address" placeholder="Rua, número, complemento">
 <label>Solicitante</label><input name="requester_name" placeholder="Nome do responsável">
@@ -23,7 +31,7 @@
 <label>Categoria</label><select name="category"><option>Manutenção</option><option>Hidráulica</option><option>Elétrica</option><option>Pintura</option><option>Instalação</option><option>Outros</option></select>
 <label>Prioridade</label><select name="priority"><option>Normal</option><option>Alta</option><option>Urgente</option></select>
 <label>Descrição</label><textarea name="description" required placeholder="Descreva o que precisa ser avaliado"></textarea>
-<button class="btn newbtn" type="submit">Enviar chamado</button>
+<button class="btn newbtn" type="submit"{% if not provider_links %} disabled{% endif %}>Enviar chamado</button>
 </form>
 </section>
 <section class="list">
@@ -32,7 +40,7 @@
 {% for item in requests %}
 <article class="card">
 <div class="head"><div><small>{{ item.external_request_id }}</small><strong>{{ item.description|default:item.category|truncatechars:95 }}</strong></div><span class="badge">{{ item.get_status_display }}</span></div>
-<div class="meta"><span>{{ item.location.label|default:"Local não informado" }}</span><span>{{ item.priority }}</span>{% if item.requester.name %}<span>{{ item.requester.name }}</span>{% endif %}<span>Atualizado {{ item.updated_at|date:"d/m H:i" }}</span></div>
+<div class="meta">{% if item.provider %}<span>Prestador: {{ item.provider.display_name }}</span>{% endif %}<span>{{ item.location.label|default:"Local não informado" }}</span><span>{{ item.priority }}</span>{% if item.requester.name %}<span>{{ item.requester.name }}</span>{% endif %}<span>Atualizado {{ item.updated_at|date:"d/m H:i" }}</span></div>
 {% if item.quote %}
 <div class="quote">
 <div class="quoteHead"><div><small>Orçamento</small><strong>{{ item.quote.status|default:"Enviado" }}</strong></div><b>R$ {{ item.quote.total|floatformat:2 }}</b></div>
@@ -41,12 +49,12 @@
 {% if not item.client_decision %}<form method="post" action="{% url 'corporate:portal_approve' item.id %}">{% csrf_token %}<button class="btn ok" type="submit">Aprovar orçamento</button></form>{% endif %}
 </div>
 {% endif %}
-{% if item.status == 'quote_approved' %}<div class="waiting">Orçamento aprovado. Aguardando a Reparos SJC enviar opções de horário.</div>{% endif %}
+{% if item.status == 'quote_approved' %}<div class="waiting">Orçamento aprovado. Aguardando {{ item.provider.display_name|default:"o prestador" }} enviar opções de horário.</div>{% endif %}
 {% if item.schedule_request and item.status == 'schedule_requested' %}
-<div class="scheduleBox"><strong>Horário solicitado: {{ item.schedule_request.date }} • {{ item.schedule_request.start }}–{{ item.schedule_request.end }}</strong><span>Reservado temporariamente. Aguardando confirmação final da Reparos SJC.</span></div>
+<div class="scheduleBox"><strong>Horário solicitado: {{ item.schedule_request.date }} • {{ item.schedule_request.start }}–{{ item.schedule_request.end }}</strong><span>Reservado temporariamente. Aguardando confirmação final de {{ item.provider.display_name|default:"o prestador" }}.</span></div>
 {% elif item.proposed_windows and item.status == 'waiting_schedule' %}
 <div class="windows">{% for w in item.proposed_windows %}<form method="post" action="{% url 'corporate:portal_schedule' item.id %}">{% csrf_token %}<input type="hidden" name="source_id" value="{{ w.sourceId }}"><button class="window" type="submit"><strong>{{ w.date }}</strong><span>{{ w.start }}–{{ w.end }}</span></button></form>{% endfor %}</div>
-{% elif item.status == 'waiting_schedule' %}<div class="waiting">As opções anteriores ficaram indisponíveis. Aguardando novas opções da Reparos SJC.</div>{% endif %}
+{% elif item.status == 'waiting_schedule' %}<div class="waiting">As opções anteriores ficaram indisponíveis. Aguardando novas opções de {{ item.provider.display_name|default:"o prestador" }}.</div>{% endif %}
 {% if item.appointment %}<div class="scheduleBox"><strong>Agendado: {{ item.appointment.date }} {{ item.appointment.time }}</strong><span>Status: {{ item.appointment.status|default:"Agendado" }}</span></div>{% endif %}
 </article>
 {% empty %}<div class="card empty">Nenhum chamado enviado ainda.</div>{% endfor %}
