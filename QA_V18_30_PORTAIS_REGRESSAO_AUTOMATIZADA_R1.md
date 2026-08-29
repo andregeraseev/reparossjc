@@ -6,13 +6,13 @@ Data: 2026-08-29
 
 Fechar o máximo possível da regressão de Portal Operations v18.30 sem depender de interação no aparelho, credenciais reais ou alteração em produção.
 
-Esta bateria roda exclusivamente com banco/arquivos temporários de teste e credenciais sintéticas de QA. Não acessa o SQLite de produção, não usa senhas reais, não faz deploy e não promove `main`.
+Esta bateria roda exclusivamente com banco/arquivos temporários de teste e credenciais geradas em tempo de execução. Não acessa o SQLite de produção, não usa senhas reais, não faz deploy e não promove `main`.
 
 ## Base
 
 - branch de origem: `deploy-portals-v18.30-20260829`
 - HEAD de origem: `f135db7b369dc957060aa2da3454105c1f6f3362`
-- branch isolada de QA: `qa-v18.30-portals-regression-r1`
+- branch isolada limpa de QA: `qa-v18.30-portals-regression-r2-clean`
 - produção permanece sem alterações.
 
 ## Cenários novos
@@ -79,6 +79,8 @@ Para cada um dos quatro portais:
 ## Gate existente preservado
 
 A bateria nova roda junto de todos os testes `corporate` + `support_center`, `manage.py check`, `makemigrations --check`, migrations em banco descartável, bootstrap idempotente dos quatro portais e gate estático de privacidade/compatibilidade da v18.30.
+
+Também há smoke externo somente leitura para login, health, os quatro caminhos de portal, raiz Corporate e feed da Central. Ele não autentica, não envia POST e não altera produção.
 
 ## Fora desta bateria
 
