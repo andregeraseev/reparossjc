@@ -1,7 +1,7 @@
 name: Test Reparos SJC Portals v18.30
 on:
   push:
-    branches: [corporate-portals-v18.30-r1, qa-v18.30-portals-regression-r1]
+    branches: [corporate-portals-v18.30-r1, qa-v18.30-portals-regression-r2-clean]
   workflow_dispatch:
 permissions:
   contents: read
