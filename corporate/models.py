@@ -210,3 +210,8 @@ class AvailabilitySnapshot(models.Model):
 
     def __str__(self):
         return self.workspace_id
+
+
+# v18.30 portal operations models live in a small separate module so the
+# established Corporate schema above remains readable and backwards compatible.
+from .portal_v1830_models import PortalChannelMembership, PortalPerson  # noqa: E402,F401
