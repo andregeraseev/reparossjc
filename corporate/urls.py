@@ -1,5 +1,5 @@
 from django.urls import path
-from . import portal_dispatch_v1830, views
+from . import logout_compat, portal_dispatch_v1830, views
 from .auth import _with_operator_cors
 
 app_name = "corporate"
@@ -20,7 +20,7 @@ urlpatterns = [
     path("api/corporate/v1/operator/availability", views.operator_availability, name="operator_availability"),
     path("api/corporate/v1/portal/requests", portal_dispatch_v1830.portal_requests_api, name="portal_requests_api"),
     path("corporativo/login/", views.CorporateLoginView.as_view(), name="login"),
-    path("corporativo/logout/", views.CorporateLogoutView.as_view(), name="logout"),
+    path("corporativo/logout/", logout_compat.corporate_logout, name="logout"),
     path("corporativo/", portal_dispatch_v1830.portal_home, name="portal"),
     path("corporativo/p/<slug:organization_slug>/<slug:channel_slug>/", portal_dispatch_v1830.portal_home, name="portal_channel"),
     path("corporativo/chamados/novo/", portal_dispatch_v1830.portal_create, name="portal_create"),
