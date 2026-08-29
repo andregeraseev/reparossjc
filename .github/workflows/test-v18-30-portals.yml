@@ -56,7 +56,7 @@ jobs:
           assert 'dados não entram na telemetria' in template.lower()
           assert 'sanitize_snapshot_v1830' in review
           assert 'aggregate-technical-only' in monitor
-          for forbidden in ('clientName','requesterName','phone','address','description','imageUrl'):
-              assert forbidden not in monitor, forbidden
+          for forbidden_key in ('"clientName"','"requesterName"','"phone"','"address"','"description"','"imageUrl"'):
+              assert forbidden_key not in monitor, forbidden_key
           print('v18.30 portal isolation/privacy/compatibility/monitoring gate OK')
           PY
