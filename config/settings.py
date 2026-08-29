@@ -31,6 +31,9 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Corporate photos are private data. They are never mounted as public media;
+# authenticated views below stream only files belonging to the caller's scope.
+MEDIA_ROOT = BASE_DIR / "private_media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG

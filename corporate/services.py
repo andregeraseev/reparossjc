@@ -4,7 +4,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.utils import timezone
 
-from .models import AvailabilitySnapshot, Organization, ServiceRequest
+from .models import AvailabilitySnapshot, Organization, OrganizationProvider, ServiceProvider, ServiceRequest
 
 VALID_STATUSES = {key for key, _ in ServiceRequest.STATUS_CHOICES}
 CLOSED_STATUSES = {"completed", "rejected", "cancelled"}
@@ -77,19 +77,61 @@ def public_organization(org):
     return {"id": org.id, "slug": org.slug, "name": org.name, "displayName": org.display_name, "demo": org.demo}
 
 
+def public_provider(provider):
+    if provider is None:
+        return None
+    return {
+        "id": provider.id,
+        "slug": provider.slug,
+        "name": provider.name,
+        "displayName": provider.display_name,
+        "workspaceId": provider.workspace_id,
+    }
+
+
+def public_portal_channel(channel):
+    if channel is None:
+        return None
+    return {
+        "id": channel.id,
+        "slug": channel.slug,
+        "displayName": channel.display_name,
+        "defaultCategory": channel.default_category,
+    }
+
+
+def public_attachments(row):
+    existing = list(row.attachments or [])
+    uploaded = [
+        {
+            "id": item.id,
+            "name": item.display_name,
+            "contentType": item.content_type,
+            "sizeBytes": item.size_bytes,
+            "downloadPath": f"/operator/attachments/{item.id}",
+            "source": "portal_upload",
+        }
+        for item in row.image_attachments.all()
+    ]
+    return existing + uploaded
+
+
 def public_request(row):
     return {
         "id": row.id,
         "externalRequestId": row.external_request_id,
         "organizationId": row.organization_id,
         "organizationName": row.organization.display_name,
+        "portalChannel": public_portal_channel(row.portal_channel),
+        "providerId": row.provider_id or "",
+        "providerName": row.provider.display_name if row.provider_id else "",
         "workspaceId": row.workspace_id,
         "location": row.location or {},
         "requester": row.requester or {},
         "category": row.category,
         "priority": row.priority,
         "description": row.description,
-        "attachments": row.attachments or [],
+        "attachments": public_attachments(row),
         "status": row.status,
         "clientDecision": row.client_decision,
         "providerLocalId": row.provider_local_id,
@@ -107,6 +149,7 @@ def contract_for(row):
         "version": 1,
         "generatedAt": timezone.now().isoformat(),
         "organization": public_organization(row.organization),
+        "provider": public_provider(row.provider),
         "serviceRequest": public_request(row),
         "quote": row.quote,
         "proposedWindows": row.proposed_windows or [],
@@ -175,12 +218,20 @@ def _validate_offered_windows(workspace_id, windows):
     return normalized
 
 
-def upsert_from_contract(payload):
+def upsert_from_contract(payload, *, provider=None, workspace_id=""):
     if payload.get("format") != "ReparosSJC_Corporate_Request" or int(payload.get("version") or 0) != 1:
         raise ValueError("invalid corporate contract")
     org_payload = payload.get("organization") or {}
     req_payload = payload.get("serviceRequest") or {}
-    org = get_or_create_org(org_payload)
+    if provider is not None:
+        org_id = str(org_payload.get("id") or "").strip()
+        org = Organization.objects.filter(pk=org_id, active=True).first()
+        if org is None:
+            raise PermissionError("organization is not registered")
+        if not OrganizationProvider.objects.filter(organization=org, provider=provider, active=True).exists():
+            raise PermissionError("provider is not authorized for this organization")
+    else:
+        org = get_or_create_org(org_payload)
     external = str(req_payload.get("externalRequestId") or "").strip()
     if not external:
         raise ValueError("serviceRequest.externalRequestId is required")
@@ -188,9 +239,13 @@ def upsert_from_contract(payload):
     row = ServiceRequest.objects.filter(organization=org, external_request_id=external).first()
     existed = row is not None
     if row is None:
-        row = ServiceRequest(id=request_id, organization=org, external_request_id=external)
+        row = ServiceRequest(id=request_id, organization=org, provider=provider, external_request_id=external)
     elif row.id != request_id and not row.provider_local_id:
         row.provider_local_id = request_id[:80]
+    if provider is not None and row.provider_id and row.provider_id != provider.id:
+        raise PermissionError("request belongs to another provider")
+    if provider is not None:
+        row.provider = provider
 
     incoming_version = int(req_payload.get("_serverVersion") or 0)
     if existed and incoming_version and incoming_version != row.server_version:
@@ -205,7 +260,11 @@ def upsert_from_contract(payload):
     incoming_decision = str(req_payload.get("clientDecision") or "").strip()
     schedule_present, incoming_schedule = _incoming_schedule(payload, req_payload)
 
-    row.workspace_id = str(req_payload.get("workspaceId") or row.workspace_id or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", ""))[:80]
+    incoming_workspace = str(req_payload.get("workspaceId") or row.workspace_id or workspace_id or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", ""))[:80]
+    expected_workspace = str(workspace_id or (provider.workspace_id if provider is not None else ""))
+    if expected_workspace and incoming_workspace != expected_workspace:
+        raise PermissionError("request belongs to another workspace")
+    row.workspace_id = incoming_workspace
     if not row.workspace_id:
         raise ValueError("workspaceId is required")
     row.location = req_payload.get("location") if isinstance(req_payload.get("location"), dict) else (row.location or {})
@@ -214,7 +273,13 @@ def upsert_from_contract(payload):
     row.priority = str(req_payload.get("priority") or row.priority or "Normal")[:40]
     row.description = str(req_payload.get("description") if req_payload.get("description") is not None else row.description)
     if isinstance(req_payload.get("attachments"), list):
-        row.attachments = req_payload.get("attachments")
+        # Portal uploads are server-owned relational files. The Android client
+        # receives only their public metadata and must never mirror it back into
+        # the legacy JSON field (which would duplicate it or forge a download path).
+        row.attachments = [
+            item for item in req_payload.get("attachments")
+            if isinstance(item, dict) and item.get("source") != "portal_upload" and not item.get("downloadPath")
+        ]
     if request_id and request_id != row.id:
         row.provider_local_id = request_id[:80]
     elif req_payload.get("providerLocalId"):

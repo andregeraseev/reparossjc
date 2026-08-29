@@ -1,5 +1,28 @@
 # 01 — Novo chat: comece aqui
 
+## Atualização prioritária — Corporate Multiportal R1
+
+> Este bloco substitui o estado operacional e o próximo passo do histórico abaixo. As regras de segurança e preservação continuam valendo.
+
+- branch de trabalho: `corporate-multi-portal-r1`;
+- HEAD remoto gated: `6ddaf458fc5722e1a49380c48bc570beb5024d27`;
+- CI autoritativo: run `33199184468`, **success**, 52 testes;
+- app correspondente: `andregeraseev/reparossjc-wear-`, branch `v18.28-multiportal-r1`;
+- app gated no run `33199545880`, artifact ID `9697325476`;
+- produção Corporate/Support continua intacta: esta branch **não foi implantada nem mesclada**.
+
+Entregas desta branch:
+- `PortalChannel` permite Amil Manutenção, Amil Distrato, Amil Jurídico, Top Móveis Manutenção e outros canais independentes;
+- cada chamado exige um prestador autorizado e chega somente ao workspace escolhido;
+- portal responsivo com upload de até 8 imagens JPG/PNG/WebP, 8 MB por arquivo e 24 MB no total;
+- imagens ficam em armazenamento privado, sem `MEDIA_URL`, e só saem por endpoints autenticados com `no-store`;
+- app 18.28 recebe canal do portal e metadados mínimos das imagens, sem permitir sobrescrever os anexos do servidor;
+- cadastro repetível pelo comando `create_corporate_portal`, que usa usuário e prestador já existentes e nunca recebe senha/token.
+
+Próximo passo exato: instalar e testar fisicamente o artifact 18.28 sem desinstalar. Depois, com o usuário presente, preparar deploy controlado desta branch no PythonAnywhere: backup SQLite, check, migrations, static, reload e smoke. Não executar deploy automaticamente.
+
+---
+
 Use esta mensagem em uma nova conversa do ChatGPT:
 
 > Abra `andregeraseev/reparossjc` e confirme primeiro o HEAD das branches `corporate-api-r1` e `support-r1`. Leia `00_CONTINUIDADE_CORPORATE_API_R1.md`, `00_CONTINUIDADE_SUPPORT_R1.md`, `01_NOVO_CHAT_COMECE_AQUI.md` e `DEPLOY_SUPPORT_R1_PYTHONANYWHERE.md`. Depois abra o app `andregeraseev/reparossjc-wear-`, branch `v18.27-support-r1`, e leia `AGENTS.md`, `00_CONTINUIDADE_REPAROS_SJC.md`, `01_NOVO_CHAT_COMECE_AQUI.md`, `qa/v18.27/RELATORIO_SUPPORT_R1_REVIEW5_PDF_AI.md` e `qa/v18.27/ARQUITETURA_SUPPORT_R1.md`. Continue exatamente do estado atual; não recomece. O Corporate API R1 Hardening1 e a Central Support R1 Review4 estão LIVE na instalação `/home/AndreGeraseev/reparossjc_corporate_api_r1`. O código Support implantado é `4a4ca987484b4480c92ad56f91ef413902e98284`, na branch local `deploy-support-r1-20260828`; migration `support_center.0001_initial`, smoke Corporate+Support e integridade SQLite passaram. A ingestão Support está habilitada. O app Review5 foi instalado sem desinstalar no Samsung SM-S911B/Android 16 e vinculou a conta `RSJC-MGHL-U85Q`; importação offline, bootstrap online, envio manual e compartilhamento contínuo funcionaram. Não repetir deploy nem recriar Review5. Ainda faltam teste físico real de PDF/IA e regressão Corporate completa. Há 24 itens na fila local e somente 9,5% de espaço livre; não limpar dados/fila. A branch futura `corporate-provider-routing-r1` está verde, mas NÃO foi implantada ou mesclada. Nunca peça/exponha secrets e não promova automaticamente para `main`/`corporate-api-r1`.

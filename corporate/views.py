@@ -6,15 +6,15 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.db import transaction
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .auth import operator_api_required
-from .models import AvailabilitySnapshot, PartnerMembership, ServiceRequest
+from .models import AvailabilitySnapshot, OrganizationProvider, PartnerMembership, PortalChannel, ServiceRequest, ServiceRequestAttachment
 from .services import (
     ConflictError,
     contract_for,
@@ -24,6 +24,7 @@ from .services import (
     window_is_future,
     window_key,
 )
+from .uploads import UploadValidationError, create_attachments, validate_images
 
 
 def _json_body(request):
@@ -33,8 +34,59 @@ def _json_body(request):
         raise ValueError("invalid JSON")
 
 
-def _membership(request):
-    return PartnerMembership.objects.select_related("organization").filter(user=request.user, active=True, organization__active=True).first()
+def _membership(request, organization_slug=None):
+    rows = PartnerMembership.objects.select_related("organization").filter(user=request.user, active=True, organization__active=True)
+    if organization_slug:
+        rows = rows.filter(organization__slug=organization_slug)
+    return rows.first()
+
+
+def _can_submit(membership):
+    return bool(membership and membership.role in {"manager", "requester"})
+
+
+def _membership_for_request(request, request_id):
+    return PartnerMembership.objects.select_related("organization").filter(
+        user=request.user,
+        active=True,
+        organization__active=True,
+        organization__service_requests__id=request_id,
+    ).first()
+
+
+def _portal_channels(organization):
+    return list(PortalChannel.objects.filter(organization=organization, active=True).select_related("default_provider"))
+
+
+def _portal_redirect(row=None, channel=None):
+    channel = channel or getattr(row, "portal_channel", None)
+    organization = getattr(row, "organization", None) or getattr(channel, "organization", None)
+    if channel is not None and organization is not None:
+        return redirect(reverse("corporate:portal_channel", args=[organization.slug, channel.slug]))
+    return redirect("corporate:portal")
+
+
+def _attachment_response(attachment):
+    try:
+        attachment.file.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404("Imagem não encontrada")
+    suffix = attachment.file.name.rsplit(".", 1)[-1].lower()
+    filename = f"{attachment.display_name}.{suffix}"
+    response = FileResponse(attachment.file, content_type=attachment.content_type, as_attachment=False, filename=filename)
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _provider_links(organization):
+    return list(
+        OrganizationProvider.objects.filter(
+            organization=organization,
+            active=True,
+            provider__active=True,
+        ).select_related("provider")
+    )
 
 
 def _reserved_window_keys(workspace_id, exclude_request_id=None):
@@ -56,11 +108,12 @@ def health(request):
 @csrf_exempt
 @operator_api_required
 def operator_requests(request):
+    workspace = request.corporate_workspace_id
+    provider = request.corporate_provider
     if request.method == "GET":
-        qs = ServiceRequest.objects.select_related("organization").all()
-        workspace = request.GET.get("workspace_id", "").strip()
-        if workspace:
-            qs = qs.filter(workspace_id=workspace)
+        qs = ServiceRequest.objects.select_related("organization", "provider", "portal_channel").prefetch_related("image_attachments").filter(workspace_id=workspace)
+        if provider is not None:
+            qs = qs.filter(provider=provider)
         updated_after = request.GET.get("updated_after", "").strip()
         if updated_after:
             try:
@@ -73,8 +126,10 @@ def operator_requests(request):
         try:
             payload = _json_body(request)
             with transaction.atomic():
-                row = upsert_from_contract(payload)
+                row = upsert_from_contract(payload, provider=provider, workspace_id=workspace)
             return JsonResponse(contract_for(row))
+        except PermissionError as exc:
+            return JsonResponse({"detail": str(exc)}, status=403)
         except ConflictError as exc:
             return JsonResponse({"detail": str(exc)}, status=409)
         except ValueError as exc:
@@ -85,15 +140,22 @@ def operator_requests(request):
 @csrf_exempt
 @operator_api_required
 def operator_request_detail(request, request_id):
-    row = get_object_or_404(ServiceRequest.objects.select_related("organization"), pk=request_id)
+    workspace = request.corporate_workspace_id
+    provider = request.corporate_provider
+    rows = ServiceRequest.objects.select_related("organization", "provider", "portal_channel").prefetch_related("image_attachments").filter(workspace_id=workspace)
+    if provider is not None:
+        rows = rows.filter(provider=provider)
+    row = get_object_or_404(rows, pk=request_id)
     if request.method == "GET":
         return JsonResponse(contract_for(row))
     if request.method in {"PUT", "POST"}:
         try:
             payload = _json_body(request)
             with transaction.atomic():
-                updated = upsert_from_contract(payload)
+                updated = upsert_from_contract(payload, provider=provider, workspace_id=workspace)
             return JsonResponse(contract_for(updated))
+        except PermissionError as exc:
+            return JsonResponse({"detail": str(exc)}, status=403)
         except ConflictError as exc:
             return JsonResponse({"detail": str(exc)}, status=409)
         except ValueError as exc:
@@ -101,12 +163,21 @@ def operator_request_detail(request, request_id):
     return JsonResponse({"detail": "method not allowed"}, status=405)
 
 
+@operator_api_required
+@require_GET
+def operator_attachment(request, attachment_id):
+    rows = ServiceRequestAttachment.objects.select_related("service_request__provider").filter(
+        service_request__workspace_id=request.corporate_workspace_id,
+    )
+    if request.corporate_provider is not None:
+        rows = rows.filter(service_request__provider=request.corporate_provider)
+    return _attachment_response(get_object_or_404(rows, pk=attachment_id))
+
+
 @csrf_exempt
 @operator_api_required
 def operator_availability(request):
-    workspace_id = request.headers.get("X-Workspace-ID", "").strip() or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", "")
-    if not workspace_id:
-        return JsonResponse({"detail": "workspace is required"}, status=400)
+    workspace_id = request.corporate_workspace_id
     if request.method == "GET":
         snap = AvailabilitySnapshot.objects.filter(pk=workspace_id).first()
         windows = normalize_public_windows(snap.windows if snap else [], limit=100, require_future=True)
@@ -167,92 +238,166 @@ class CorporateLogoutView(LogoutView):
 
 
 @login_required
-def portal_home(request):
-    membership = _membership(request)
+def portal_home(request, organization_slug=None, channel_slug=None):
+    membership = _membership(request, organization_slug)
     if not membership:
         return render(request, "corporate/no_access.html", status=403)
-    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization")[:100]
-    return render(request, "corporate/portal.html", {"membership": membership, "organization": membership.organization, "requests": rows})
+    channels = _portal_channels(membership.organization)
+    channel = None
+    if channel_slug:
+        channel = next((item for item in channels if item.slug == channel_slug), None)
+        if channel is None:
+            raise Http404("Portal não encontrado")
+    elif channels:
+        channel = channels[0]
+    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related(
+        "organization", "provider", "portal_channel"
+    ).prefetch_related("image_attachments")
+    if channel is not None:
+        rows = rows.filter(portal_channel=channel)
+    provider_links = _provider_links(membership.organization)
+    selected_provider_id = channel.default_provider_id if channel and any(
+        link.provider_id == channel.default_provider_id for link in provider_links
+    ) else next((link.provider_id for link in provider_links if link.is_default), "")
+    if not selected_provider_id and len(provider_links) == 1:
+        selected_provider_id = provider_links[0].provider_id
+    memberships = PartnerMembership.objects.select_related("organization").filter(
+        user=request.user, active=True, organization__active=True
+    )
+    return render(
+        request,
+        "corporate/portal.html",
+        {
+            "membership": membership,
+            "organization": membership.organization,
+            "requests": rows[:100],
+            "provider_links": provider_links,
+            "selected_provider_id": selected_provider_id,
+            "portal_channels": channels,
+            "portal_channel": channel,
+            "memberships": memberships,
+            "can_submit": _can_submit(membership),
+        },
+    )
 
 
 @login_required
 @require_POST
 def portal_create(request):
-    membership = _membership(request)
+    membership = _membership(request, request.POST.get("organization_slug", "").strip() or None)
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
+    if not _can_submit(membership):
+        return JsonResponse({"detail": "read-only membership"}, status=403)
     org = membership.organization
+    channel_id = request.POST.get("portal_channel_id", "").strip()
+    channel = PortalChannel.objects.filter(pk=channel_id, organization=org, active=True).first() if channel_id else None
+    if channel_id and channel is None:
+        messages.error(request, "O portal selecionado não pertence a esta empresa ou está inativo.")
+        return redirect("corporate:portal")
+    if channel is None:
+        channel = PortalChannel.objects.filter(organization=org, active=True).first()
+    provider_links = _provider_links(org)
+    provider_id = request.POST.get("provider_id", "").strip()
+    provider_link = next((link for link in provider_links if link.provider_id == provider_id), None)
+    if provider_link is None and not provider_id:
+        if channel and channel.default_provider_id:
+            provider_link = next((link for link in provider_links if link.provider_id == channel.default_provider_id), None)
+        if provider_link is None:
+            provider_link = next((link for link in provider_links if link.is_default), None)
+        if provider_link is None and len(provider_links) == 1:
+            provider_link = provider_links[0]
+    if provider_link is None:
+        messages.error(request, "Selecione um prestador autorizado para enviar o chamado.")
+        return _portal_redirect(channel=channel)
+    provider = provider_link.provider
     external = request.POST.get("external_request_id", "").strip()
     if not external:
         external = f"{org.slug.upper()[:12]}-{timezone.localtime().strftime('%Y%m%d-%H%M%S')}"
     if ServiceRequest.objects.filter(organization=org, external_request_id=external).exists():
         messages.error(request, "Já existe um chamado com esse número.")
-        return redirect("corporate:portal")
+        return _portal_redirect(channel=channel)
+    try:
+        images = validate_images(request.FILES.getlist("images"))
+    except UploadValidationError as exc:
+        messages.error(request, str(exc))
+        return _portal_redirect(channel=channel)
     location_label = request.POST.get("location", "").strip()
-    row = ServiceRequest.objects.create(
-        id=new_request_id(),
-        external_request_id=external[:120],
-        organization=org,
-        workspace_id=getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", ""),
-        location={"label": location_label, "address": request.POST.get("address", "").strip()},
-        requester={
-            "name": request.POST.get("requester_name", "").strip() or request.user.get_full_name() or request.user.username,
-            "phone": request.POST.get("requester_phone", "").strip(),
-            "email": request.user.email or "",
-        },
-        category=request.POST.get("category", "").strip() or "Manutenção",
-        priority=request.POST.get("priority", "").strip() or "Normal",
-        description=request.POST.get("description", "").strip(),
-        status="new",
-    )
-    messages.success(request, f"Chamado {row.external_request_id} enviado para a Reparos SJC.")
-    return redirect("corporate:portal")
+    with transaction.atomic():
+        row = ServiceRequest.objects.create(
+            id=new_request_id(),
+            external_request_id=external[:120],
+            organization=org,
+            portal_channel=channel,
+            provider=provider,
+            workspace_id=provider.workspace_id,
+            location={"label": location_label, "address": request.POST.get("address", "").strip()},
+            requester={
+                "name": request.POST.get("requester_name", "").strip() or request.user.get_full_name() or request.user.username,
+                "phone": request.POST.get("requester_phone", "").strip(),
+                "email": request.user.email or "",
+            },
+            category=request.POST.get("category", "").strip() or (channel.default_category if channel else "Manutenção"),
+            priority=request.POST.get("priority", "").strip() or "Normal",
+            description=request.POST.get("description", "").strip(),
+            status="new",
+        )
+        create_attachments(row, images, uploaded_by=request.user)
+    count = len(images)
+    image_text = f" com {count} foto(s)" if count else ""
+    messages.success(request, f"Chamado {row.external_request_id}{image_text} enviado para {provider.display_name}.")
+    return _portal_redirect(row=row)
 
 
 @login_required
 @require_POST
 def portal_approve(request, request_id):
-    membership = _membership(request)
+    membership = _membership_for_request(request, request_id)
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
+    if not _can_submit(membership):
+        return JsonResponse({"detail": "read-only membership"}, status=403)
     with transaction.atomic():
         row = get_object_or_404(ServiceRequest.objects.select_for_update(), pk=request_id, organization=membership.organization)
         if not row.quote:
             return HttpResponseBadRequest("Orçamento ainda não disponível")
         if row.status in {"scheduled", "in_service", "completed", "cancelled", "rejected"}:
             messages.error(request, "Esse chamado não pode mais ser aprovado nesta etapa.")
-            return redirect("corporate:portal")
+            return _portal_redirect(row=row)
         row.client_decision = "approved"
         row.status = "quote_approved"
         row.proposed_windows = []
         row.server_version += 1
         row.save(update_fields=["client_decision", "status", "proposed_windows", "server_version", "updated_at"])
-    messages.success(request, "Orçamento aprovado. Aguardando a Reparos SJC oferecer horários.")
-    return redirect("corporate:portal")
+    provider_name = row.provider.display_name if row.provider_id else "o prestador"
+    messages.success(request, f"Orçamento aprovado. Aguardando {provider_name} oferecer horários.")
+    return _portal_redirect(row=row)
 
 
 @login_required
 @require_POST
 def portal_schedule(request, request_id):
-    membership = _membership(request)
+    membership = _membership_for_request(request, request_id)
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
+    if not _can_submit(membership):
+        return JsonResponse({"detail": "read-only membership"}, status=403)
     source_id = request.POST.get("source_id", "").strip()
 
     with transaction.atomic():
         row = get_object_or_404(ServiceRequest.objects.select_for_update(), pk=request_id, organization=membership.organization)
         if row.status != "waiting_schedule" or row.client_decision != "approved" or row.schedule_request:
             messages.error(request, "Esse chamado não está aguardando escolha de horário.")
-            return redirect("corporate:portal")
+            return _portal_redirect(row=row)
         chosen = next((w for w in (row.proposed_windows or []) if str(w.get("sourceId") or "") == source_id), None)
         if not chosen or not window_is_future(chosen):
             messages.error(request, "Esse horário não está mais disponível. Escolha outra opção.")
-            return redirect("corporate:portal")
+            return _portal_redirect(row=row)
 
         snap = AvailabilitySnapshot.objects.select_for_update().filter(pk=row.workspace_id or getattr(settings, "CORPORATE_DEFAULT_WORKSPACE_ID", "")).first()
         if snap is None or window_key(chosen) not in {window_key(w) for w in normalize_public_windows(snap.windows, limit=100, require_future=True)}:
             messages.error(request, "Esse horário acabou de ficar indisponível. Escolha outra opção.")
-            return redirect("corporate:portal")
+            return _portal_redirect(row=row)
 
         conflict = ServiceRequest.objects.select_for_update().filter(
             workspace_id=row.workspace_id,
@@ -261,7 +406,7 @@ def portal_schedule(request, request_id):
         ).exclude(pk=row.pk)
         if any(window_key(other.schedule_request) == window_key(chosen) for other in conflict):
             messages.error(request, "Esse horário acabou de ser reservado por outro atendimento. Escolha outra opção.")
-            return redirect("corporate:portal")
+            return _portal_redirect(row=row)
 
         row.schedule_request = {
             "sourceId": str(chosen.get("sourceId") or ""),
@@ -297,8 +442,22 @@ def portal_schedule(request, request_id):
                 other.server_version += 1
                 other.save(update_fields=["proposed_windows", "server_version", "updated_at"])
 
-    messages.success(request, "Horário solicitado e reservado temporariamente. A Reparos SJC fará a confirmação final.")
-    return redirect("corporate:portal")
+    provider_name = row.provider.display_name if row.provider_id else "O prestador"
+    messages.success(request, f"Horário solicitado e reservado temporariamente. {provider_name} fará a confirmação final.")
+    return _portal_redirect(row=row)
+
+
+@login_required
+@require_GET
+def portal_attachment(request, attachment_id):
+    attachment = get_object_or_404(
+        ServiceRequestAttachment.objects.select_related("service_request__organization"),
+        pk=attachment_id,
+        service_request__organization__memberships__user=request.user,
+        service_request__organization__memberships__active=True,
+        service_request__organization__active=True,
+    )
+    return _attachment_response(attachment)
 
 
 @login_required
@@ -307,5 +466,7 @@ def portal_requests_api(request):
     membership = _membership(request)
     if not membership:
         return JsonResponse({"detail": "forbidden"}, status=403)
-    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related("organization")[:100]
+    rows = ServiceRequest.objects.filter(organization=membership.organization).select_related(
+        "organization", "provider", "portal_channel"
+    ).prefetch_related("image_attachments")[:100]
     return JsonResponse({"requests": [contract_for(row) for row in rows], "serverTime": timezone.now().isoformat()})

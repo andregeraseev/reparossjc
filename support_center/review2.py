@@ -3,8 +3,9 @@ from django.views.decorators.http import require_http_methods
 
 from . import views as base
 from .models import SupportSnapshot
+from .portal_monitor_v1830 import sanitize_snapshot_v1830
 from .secure_ingest import ingest_mode
-from .services import clean_text, prune_device_data, sanitize_snapshot
+from .services import clean_text, prune_device_data
 
 
 @csrf_exempt
@@ -30,7 +31,7 @@ def api_snapshot(request):
     except ValueError as exc:
         return base._json({"detail": str(exc)}, status=400)
 
-    clean = sanitize_snapshot(data.get("snapshot") or {})
+    clean = sanitize_snapshot_v1830(data.get("snapshot") or {})
     SupportSnapshot.objects.create(account=device.account, device=device, data=clean)
     app_version = clean_text((clean.get("app") or {}).get("version"), 40)
     base._touch(device, app_version=app_version)
