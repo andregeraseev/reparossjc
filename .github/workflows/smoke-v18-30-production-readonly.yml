@@ -2,7 +2,7 @@ name: Smoke Reparos SJC v18.30 Production Readonly
 
 on:
   push:
-    branches: [qa-v18.30-portals-regression-r1]
+    branches: [qa-v18.30-portals-regression-r2-clean]
   workflow_dispatch:
 
 permissions:
