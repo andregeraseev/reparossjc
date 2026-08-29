@@ -115,6 +115,7 @@ class MultiPortalUploadTests(TestCase):
         self.assertEqual(downloaded.status_code, 200)
         self.assertEqual(downloaded["Content-Type"], "image/png")
         self.assertEqual(downloaded["Cache-Control"], "private, no-store")
+        downloaded.close()
         preflight = self.client.options(
             reverse("corporate:operator_attachment", args=[attachment.id]),
             HTTP_ORIGIN="null",
