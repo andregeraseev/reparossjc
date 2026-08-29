@@ -60,3 +60,56 @@ jobs:
               assert forbidden_key not in monitor, forbidden_key
           print('v18.30 portal isolation/privacy/compatibility/monitoring gate OK')
           PY
+
+  public-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar produção externamente sem autenticação e sem mutação
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://www.reparossjc.online'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          request() {
+            local name="$1" url="$2"
+            curl --silent --show-error --max-time 20 \
+              -D "$tmp/${name}.headers" -o "$tmp/${name}.body" \
+              -w '%{http_code}' "$url"
+          }
+
+          login_code=$(request login "$base/corporativo/login/")
+          test "$login_code" = '200'
+          ! grep -qiE 'server error|traceback|internal server error' "$tmp/login.body"
+
+          health_code=$(request health "$base/api/corporate/v1/health")
+          test "$health_code" = '200'
+          ! grep -qiE 'server error|traceback|internal server error' "$tmp/health.body"
+
+          for spec in \
+            'cris:/corporativo/p/cris-teste/teste/' \
+            'juridico:/corporativo/p/amil/juridico/' \
+            'manutencao:/corporativo/p/amil/manutencao/' \
+            'distrato:/corporativo/p/amil/distrato/' \
+            'portal_root:/corporativo/' \
+            'support_feed:/suporte/monitoramento/portal-ops.json'
+          do
+            name=${spec%%:*}
+            path=${spec#*:}
+            code=$(request "$name" "$base$path")
+            case "$code" in
+              301|302|303|307|308) ;;
+              *)
+                echo "Unexpected anonymous status for $name: $code" >&2
+                head -c 500 "$tmp/${name}.body" >&2 || true
+                exit 1
+                ;;
+            esac
+            ! grep -qiE 'server error|traceback|internal server error' "$tmp/${name}.body"
+            location=$(awk 'BEGIN{IGNORECASE=1} /^Location:/{gsub(/\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' "$tmp/${name}.headers")
+            test -n "$location"
+            printf '%s status=%s redirect=%s\n' "$name" "$code" "$location"
+          done
+
+          echo 'v18.30 external anonymous production smoke OK; no credentials or mutations used'
