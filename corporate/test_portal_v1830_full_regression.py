@@ -1,3 +1,4 @@
+import secrets
 import tempfile
 
 from django.contrib.auth import get_user_model
@@ -33,9 +34,8 @@ class PortalV1830FullRegressionTests(TestCase):
     and does not perform any external deploy or mutation.
     """
 
-    PASSWORD = "qa-only-pass-1830"
-
     def setUp(self):
+        self.login_password = secrets.token_urlsafe(32)
         self.media = tempfile.TemporaryDirectory()
         self.media_override = override_settings(MEDIA_ROOT=self.media.name)
         self.media_override.enable()
@@ -93,7 +93,7 @@ class PortalV1830FullRegressionTests(TestCase):
                 active=True,
                 sort_order=order,
             )
-            user = User.objects.create_user(username=username, password=self.PASSWORD)
+            user = User.objects.create_user(username=username, password=self.login_password)
             PartnerMembership.objects.create(user=user, organization=org, role="manager", active=True)
             PortalChannelMembership.objects.create(
                 user=user,
@@ -149,7 +149,7 @@ class PortalV1830FullRegressionTests(TestCase):
 
         first = self.client.post(
             login_url,
-            {"username": self.portals["cris"]["username"], "password": self.PASSWORD},
+            {"username": self.portals["cris"]["username"], "password": self.login_password},
         )
         self.assertEqual(first.status_code, 302)
         self.assertEqual(
@@ -169,7 +169,7 @@ class PortalV1830FullRegressionTests(TestCase):
 
         second = self.client.post(
             login_url,
-            {"username": self.portals["juridico"]["username"], "password": self.PASSWORD},
+            {"username": self.portals["juridico"]["username"], "password": self.login_password},
         )
         self.assertEqual(second.status_code, 302)
         self.assertEqual(
