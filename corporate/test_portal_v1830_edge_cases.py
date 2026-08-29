@@ -75,6 +75,17 @@ class PortalV1830EdgeCaseTests(TestCase):
             },
         )
 
+    def _allowed_row(self, *, request_id="SR_EDGE_ALLOWED", external="EDGE-ALLOWED"):
+        return ServiceRequest.objects.create(
+            id=request_id,
+            external_request_id=external,
+            organization=self.organization,
+            portal_channel=self.allowed,
+            provider=self.provider,
+            workspace_id=self.provider.workspace_id,
+            status="new",
+        )
+
     def test_long_external_ids_are_normalized_before_duplicate_check(self):
         prefix = "X" * 120
         first = self._create(prefix + "-primeiro")
@@ -89,19 +100,31 @@ class PortalV1830EdgeCaseTests(TestCase):
         self.assertEqual(second.status_code, 302)
         self.assertEqual(ServiceRequest.objects.filter(organization=self.organization).count(), 1)
 
+    def test_external_id_whitespace_is_normalized_before_duplicate_check(self):
+        first = self._create("  EDGE-WHITESPACE  ")
+        self.assertEqual(first.status_code, 302)
+        row = ServiceRequest.objects.get(organization=self.organization)
+        self.assertEqual(row.external_request_id, "EDGE-WHITESPACE")
+
+        second = self._create("EDGE-WHITESPACE")
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(ServiceRequest.objects.filter(organization=self.organization).count(), 1)
+
     def test_explicit_unauthorized_portal_filter_is_rejected(self):
-        ServiceRequest.objects.create(
-            id="SR_EDGE_ALLOWED",
-            external_request_id="EDGE-ALLOWED",
-            organization=self.organization,
-            portal_channel=self.allowed,
-            provider=self.provider,
-            workspace_id=self.provider.workspace_id,
-            status="new",
-        )
+        self._allowed_row()
         response = self.client.get(
             reverse("corporate:portal_requests_api"),
             {"portal_channel_id": self.other.id},
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {"detail": "portal forbidden"})
+
+    def test_explicit_authorized_portal_filter_remains_supported(self):
+        row = self._allowed_row()
+        response = self.client.get(
+            reverse("corporate:portal_requests_api"),
+            {"portal_channel_id": self.allowed.id},
+        )
+        self.assertEqual(response.status_code, 200)
+        ids = {item["serviceRequest"]["id"] for item in response.json()["requests"]}
+        self.assertEqual(ids, {row.id})
