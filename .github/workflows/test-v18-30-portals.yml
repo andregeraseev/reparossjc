@@ -29,22 +29,28 @@ jobs:
       - run: python -m compileall corporate support_center
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py migrate --noinput
-      - run: python manage.py bootstrap_v1830_portals
       - run: python manage.py test corporate -v 2
-      - name: v18.30 static privacy and scope gate
+      - run: python manage.py migrate --noinput
+      - name: Bootstrap four v18.30 portals smoke test
+        run: |
+          python manage.py bootstrap_v1830_portals
+          python manage.py bootstrap_v1830_portals
+      - name: v18.30 static privacy, compatibility and scope gate
         run: |
           python - <<'PY'
           from pathlib import Path
           models=Path('corporate/portal_v1830_models.py').read_text()
           flow=Path('corporate/portal_v1830.py').read_text()
+          dispatch=Path('corporate/portal_dispatch_v1830.py').read_text()
           bootstrap=Path('corporate/management/commands/bootstrap_v1830_portals.py').read_text()
           template=Path('corporate/templates/corporate/portal_v1830.html').read_text()
           assert 'PortalChannelMembership' in models and 'PortalPerson' in models
           assert '_scopes(user)' in flow and 'portal_channel_id__in=allowed_ids' in flow
           assert 'personId' in flow and 'portal_person_id' in flow
+          assert 'legacy_views.portal_home' in dispatch and 'legacy_views.portal_create' in dispatch
+          assert 'PortalChannelMembership.objects.filter' in dispatch
           assert 'RSJC_PORTAL_AMIL_JURIDICO_PASSWORD' in bootstrap
           assert 'password' not in template.lower()
           assert 'dados não entram na telemetria' in template.lower()
-          print('v18.30 portal isolation/privacy gate OK')
+          print('v18.30 portal isolation/privacy/compatibility gate OK')
           PY
