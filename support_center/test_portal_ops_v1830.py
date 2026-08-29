@@ -12,12 +12,12 @@ class PortalOpsMonitoringV1830Tests(TestCase):
         User = get_user_model()
         self.staff = User.objects.create_user(
             username="portal-ops-staff",
-            password="qa-only-staff-pass",
+            password=None,
             is_staff=True,
         )
         self.normal = User.objects.create_user(
             username="portal-ops-normal",
-            password="qa-only-normal-pass",
+            password=None,
         )
         self.account = SupportAccount.objects.create(
             account_key_hash=account_key_hash("sacct_portal_ops_12345678"),
