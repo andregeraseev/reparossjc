@@ -109,7 +109,7 @@ class PortalV1830IsolationTests(TestCase):
     def test_portal_api_is_scoped(self):
         response = self.client.get(reverse("corporate:portal_requests_api"))
         self.assertEqual(response.status_code, 200)
-        ids = {row["id"] for row in response.json()["requests"]}
+        ids = {row["serviceRequest"]["id"] for row in response.json()["requests"]}
         self.assertIn("SRLEGAL", ids)
         self.assertNotIn("SRMAINT", ids)
 
