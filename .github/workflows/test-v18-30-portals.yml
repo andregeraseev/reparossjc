@@ -1,0 +1,50 @@
+name: Test Reparos SJC Portals v18.30
+on:
+  push:
+    branches: [corporate-portals-v18.30-r1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_DEBUG: '1'
+      DJANGO_SECRET_KEY: 'ci-only-secret-key-not-production'
+      DJANGO_ALLOWED_HOSTS: 'localhost,127.0.0.1,testserver'
+      DJANGO_SECURE_SSL_REDIRECT: '0'
+      DJANGO_HSTS_SECONDS: '0'
+      RSJC_CORPORATE_OPERATOR_TOKEN: 'test-operator-token'
+      RSJC_WORKSPACE_ID: 'ws_test'
+      RSJC_PORTAL_CRIS_TESTE_PASSWORD: 'ci-only-cris-password'
+      RSJC_PORTAL_AMIL_JURIDICO_PASSWORD: 'ci-only-juridico-password'
+      RSJC_PORTAL_AMIL_MANUTENCAO_PASSWORD: 'ci-only-manutencao-password'
+      RSJC_PORTAL_AMIL_DISTRATO_PASSWORD: 'ci-only-distrato-password'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip 'Django==5.2.11' 'django-csp>=4,<5'
+      - run: python -m compileall corporate support_center
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py migrate --noinput
+      - run: python manage.py bootstrap_v1830_portals
+      - run: python manage.py test corporate -v 2
+      - name: v18.30 static privacy and scope gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          models=Path('corporate/portal_v1830_models.py').read_text()
+          flow=Path('corporate/portal_v1830.py').read_text()
+          bootstrap=Path('corporate/management/commands/bootstrap_v1830_portals.py').read_text()
+          template=Path('corporate/templates/corporate/portal_v1830.html').read_text()
+          assert 'PortalChannelMembership' in models and 'PortalPerson' in models
+          assert '_scopes(user)' in flow and 'portal_channel_id__in=allowed_ids' in flow
+          assert 'personId' in flow and 'portal_person_id' in flow
+          assert 'RSJC_PORTAL_AMIL_JURIDICO_PASSWORD' in bootstrap
+          assert 'password' not in template.lower()
+          assert 'dados não entram na telemetria' in template.lower()
+          print('v18.30 portal isolation/privacy gate OK')
+          PY
