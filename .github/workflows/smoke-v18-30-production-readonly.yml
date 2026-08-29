@@ -1,0 +1,68 @@
+name: Smoke Reparos SJC v18.30 Production Readonly
+
+on:
+  push:
+    branches: [qa-v18.30-portals-regression-r2-clean]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar rotas públicas sem autenticação e sem mutação
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://www.reparossjc.online'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          fetch_code() {
+            local name="$1" url="$2"
+            local headers="$tmp/${name}.headers" body="$tmp/${name}.body"
+            code=$(curl --fail-with-body --silent --show-error --max-time 20 \
+              -D "$headers" -o "$body" -w '%{http_code}' "$url" || true)
+            printf '%s %s\n' "$name" "$code"
+            printf '%s' "$code"
+          }
+
+          login_code=$(fetch_code login "$base/corporativo/login/" | tail -n1)
+          test "$login_code" = '200'
+          ! grep -qiE 'server error|traceback|internal server error' "$tmp/login.body"
+
+          health_code=$(fetch_code health "$base/api/corporate/v1/health" | tail -n1)
+          test "$health_code" = '200'
+          ! grep -qiE 'server error|traceback|internal server error' "$tmp/health.body"
+
+          for spec in \
+            'cris:/corporativo/p/cris-teste/teste/' \
+            'juridico:/corporativo/p/amil/juridico/' \
+            'manutencao:/corporativo/p/amil/manutencao/' \
+            'distrato:/corporativo/p/amil/distrato/' \
+            'portal_root:/corporativo/' \
+            'support_feed:/suporte/monitoramento/portal-ops.json'
+          do
+            name=${spec%%:*}
+            path=${spec#*:}
+            code=$(fetch_code "$name" "$base$path" | tail -n1)
+            case "$code" in
+              301|302|303|307|308) ;;
+              *)
+                echo "Unexpected anonymous status for $name: $code" >&2
+                echo '--- headers ---' >&2
+                cat "$tmp/${name}.headers" >&2 || true
+                echo '--- body prefix ---' >&2
+                head -c 500 "$tmp/${name}.body" >&2 || true
+                exit 1
+                ;;
+            esac
+            ! grep -qiE 'server error|traceback|internal server error' "$tmp/${name}.body"
+            location=$(awk 'BEGIN{IGNORECASE=1} /^Location:/{gsub(/\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' "$tmp/${name}.headers")
+            test -n "$location"
+            printf '%s redirects_to=%s\n' "$name" "$location"
+          done
+
+          echo 'v18.30 external anonymous production smoke OK; no credentials or mutations used'
