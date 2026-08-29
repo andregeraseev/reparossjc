@@ -20,11 +20,11 @@ class PortalV1830IsolationTests(TestCase):
             id="org_amil_demo", slug="amil", name="Amil", display_name="Amil", demo=False, active=True
         )
         self.provider = ServiceProvider.objects.create(
-            id="provider_reparos_sjc",
-            slug="reparos-sjc",
-            name="Reparos SJC",
-            display_name="Reparos SJC",
-            workspace_id="ws-test",
+            id="provider_v1830_test",
+            slug="reparos-sjc-v1830-test",
+            name="Reparos SJC v18.30 Test",
+            display_name="Reparos SJC v18.30 Test",
+            workspace_id="ws-v1830-test",
             active=True,
         )
         OrganizationProvider.objects.create(
