@@ -29,7 +29,7 @@ jobs:
       - run: python -m compileall corporate support_center
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py test corporate -v 2
+      - run: python manage.py test corporate support_center -v 2
       - run: python manage.py migrate --noinput
       - name: Bootstrap four v18.30 portals smoke test
         run: |
@@ -44,6 +44,8 @@ jobs:
           dispatch=Path('corporate/portal_dispatch_v1830.py').read_text()
           bootstrap=Path('corporate/management/commands/bootstrap_v1830_portals.py').read_text()
           template=Path('corporate/templates/corporate/portal_v1830.html').read_text()
+          monitor=Path('support_center/portal_monitor_v1830.py').read_text()
+          review=Path('support_center/review2.py').read_text()
           assert 'PortalChannelMembership' in models and 'PortalPerson' in models
           assert '_scopes(user)' in flow and 'portal_channel_id__in=allowed_ids' in flow
           assert 'personId' in flow and 'portal_person_id' in flow
@@ -52,5 +54,9 @@ jobs:
           assert 'RSJC_PORTAL_AMIL_JURIDICO_PASSWORD' in bootstrap
           assert 'password' not in template.lower()
           assert 'dados não entram na telemetria' in template.lower()
-          print('v18.30 portal isolation/privacy/compatibility gate OK')
+          assert 'sanitize_snapshot_v1830' in review
+          assert 'aggregate-technical-only' in monitor
+          for forbidden in ('clientName','requesterName','phone','address','description','imageUrl'):
+              assert forbidden not in monitor, forbidden
+          print('v18.30 portal isolation/privacy/compatibility/monitoring gate OK')
           PY
