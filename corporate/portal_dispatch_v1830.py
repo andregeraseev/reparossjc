@@ -5,10 +5,12 @@ channel-scoped experience. Existing organization-only users keep the proven R1
 flow unchanged until they are migrated deliberately.
 """
 
+from django.contrib import messages
+from django.db import IntegrityError
 from django.http import JsonResponse
 
 from . import portal_v1830, views as legacy_views
-from .models import PortalChannelMembership
+from .models import PortalChannelMembership, ServiceRequest
 
 
 def _uses_v1830(user):
@@ -54,6 +56,35 @@ def _authorized_v1830_channel(user, channel_id):
     ).exists()
 
 
+def _duplicate_v1830_redirect(request):
+    """Turn a concurrent duplicate insert into the same friendly portal result.
+
+    The normal duplicate check still runs inside ``portal_v1830.portal_create``.
+    This is only the last-resort race guard for two requests that both pass that
+    check before one of them commits the unique organization/external-id pair.
+    Unrelated integrity errors are deliberately re-raised by the caller.
+    """
+    external = str(request.POST.get("external_request_id") or "").strip()[:120]
+    organization = portal_v1830._organization_for(
+        request.user,
+        str(request.POST.get("organization_slug") or "").strip() or None,
+    )
+    if not organization or not external:
+        return None
+    if not ServiceRequest.objects.filter(
+        organization=organization,
+        external_request_id=external,
+    ).exists():
+        return None
+    channel, _ = portal_v1830._channel_for(
+        request.user,
+        organization,
+        channel_id=str(request.POST.get("portal_channel_id") or "").strip() or None,
+    )
+    messages.error(request, "Já existe um chamado com esse número.")
+    return portal_v1830._redirect(channel=channel)
+
+
 def portal_home(request, organization_slug=None, channel_slug=None):
     if _uses_v1830(request.user):
         return portal_v1830.portal_home(request, organization_slug, channel_slug)
@@ -63,7 +94,13 @@ def portal_home(request, organization_slug=None, channel_slug=None):
 def portal_create(request):
     if _uses_v1830(request.user):
         _normalize_v1830_external_id(request)
-        return portal_v1830.portal_create(request)
+        try:
+            return portal_v1830.portal_create(request)
+        except IntegrityError:
+            duplicate = _duplicate_v1830_redirect(request)
+            if duplicate is not None:
+                return duplicate
+            raise
     return legacy_views.portal_create(request)
 
 

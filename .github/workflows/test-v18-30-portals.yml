@@ -1,7 +1,7 @@
 name: Test Reparos SJC Portals v18.30
 on:
   push:
-    branches: [corporate-portals-v18.30-r1, qa-v18.30-portals-regression-r2-clean, v18.31-stability-r1]
+    branches: [corporate-portals-v18.30-r1, qa-v18.30-portals-regression-r2-clean, v18.31-stability-r1, v18.32-polish-r1]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
         run: |
           python manage.py bootstrap_v1830_portals
           python manage.py bootstrap_v1830_portals
-      - name: v18.30 static privacy, compatibility and scope gate
+      - name: v18.30/v18.32 static privacy, compatibility and scope gate
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -51,6 +51,8 @@ jobs:
           assert 'personId' in flow and 'portal_person_id' in flow
           assert 'legacy_views.portal_home' in dispatch and 'legacy_views.portal_create' in dispatch
           assert 'PortalChannelMembership.objects.filter' in dispatch
+          assert '_normalize_v1830_external_id' in dispatch
+          assert '_duplicate_v1830_redirect' in dispatch and 'except IntegrityError' in dispatch
           assert 'RSJC_PORTAL_AMIL_JURIDICO_PASSWORD' in bootstrap
           assert 'password' not in template.lower()
           assert 'dados não entram na telemetria' in template.lower()
@@ -58,7 +60,7 @@ jobs:
           assert 'aggregate-technical-only' in monitor
           for forbidden_key in ('"clientName"','"requesterName"','"phone"','"address"','"description"','"imageUrl"'):
               assert forbidden_key not in monitor, forbidden_key
-          print('v18.30 portal isolation/privacy/compatibility/monitoring gate OK')
+          print('portal isolation/privacy/compatibility/race-hardening gate OK')
           PY
 
   public-smoke:
@@ -112,4 +114,4 @@ jobs:
             printf '%s status=%s redirect=%s\n' "$name" "$code" "$location"
           done
 
-          echo 'v18.30 external anonymous production smoke OK; no credentials or mutations used'
+          echo 'external anonymous production smoke OK; no credentials or mutations used'
