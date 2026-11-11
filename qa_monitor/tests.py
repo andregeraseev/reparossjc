@@ -79,4 +79,13 @@ class QaMonitorTests(TestCase):
         client = Client(enforce_csrf_checks=True)
         page = client.get("/qa/login/", secure=True)
         self.assertContains(page, "csrfmiddlewaretoken")
+        self.assertEqual(page.headers["Referrer-Policy"], "same-origin")
         self.assertEqual(client.post("/qa/login/", secure=True).status_code, 403)
+        get_user_model().objects.create_user("qa-review", password="fixture-password", is_staff=True)
+        login = client.post("/qa/login/", {
+            "username": "qa-review", "password": "fixture-password",
+            "csrfmiddlewaretoken": client.cookies["rsjc_r49_csrf"].value,
+        }, secure=True, HTTP_REFERER="https://testserver/qa/login/", follow=True)
+        self.assertContains(login, "Sessões enviadas")
+        cookie = client.cookies["rsjc_r49_session"]
+        self.assertTrue(cookie["secure"] and cookie["httponly"])
