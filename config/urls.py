@@ -26,3 +26,10 @@ urlpatterns = [
     path("", home, name="home"),
 ]
 
+
+
+from django.conf import settings
+from django.urls import include
+
+if settings.RSJC_ENABLE_CLOUD_BACKUP:
+    urlpatterns += [path("api/rsjc-backup/v1/", include("cloud_backup.urls"))]

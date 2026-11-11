@@ -121,3 +121,11 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# A rota de backup fica inativa até a configuração do ambiente.
+import os as _backup_env
+
+RSJC_ENABLE_CLOUD_BACKUP = _backup_env.environ.get("RSJC_ENABLE_CLOUD_BACKUP") == "1"
+if RSJC_ENABLE_CLOUD_BACKUP:
+    INSTALLED_APPS += ["cloud_backup"]
