@@ -1,0 +1,12 @@
+{% extends "qa_monitor/base.html" %}
+{% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
+{% block body %}
+<p><a href="{% url 'qa_dashboard' %}">Voltar às sessões</a></p>
+<h1>Sessão {{ row.id|stringformat:"s"|slice:":8" }}</h1>
+<p>{{ row.tester.code }} · versão {{ row.payload.version }} · Android SDK {{ row.payload.sdk }} · {% if row.payload.form == "tablet" %}tablet{% else %}celular{% endif %}</p>
+<p class="muted">Aparelho de QA {{ row.payload.device|slice:":8" }} · {{ row.payload.duration }} s</p>
+<div class="card table"><table><thead><tr><th scope="col">Tempo</th><th scope="col">Etapa</th><th scope="col">Resultado</th></tr></thead>
+<tbody>{% for event in events %}<tr><td>{{ event.at }} s</td><td>{{ event.label }}</td>
+<td>{% if event.result == "verified" %}Gravação conferida{% elif event.result == "failed" %}Falha{% else %}Tela aberta{% endif %}</td></tr>
+{% empty %}<tr><td colspan="3">Nenhum evento registrado.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

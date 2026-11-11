@@ -1,0 +1,16 @@
+{% extends "qa_monitor/base.html" %}
+{% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
+{% block body %}
+<h1>Sessões enviadas</h1>
+<div class="card table">
+<table><thead><tr><th scope="col">Recebida</th><th scope="col">Testador</th><th scope="col">Versão / Android SDK</th><th scope="col">Gravações conferidas</th><th scope="col">Falhas</th></tr></thead>
+<tbody>
+{% for row in page %}<tr><td><a href="{% url 'qa_detail' row.id %}">{{ row.received_at|date:"d/m/Y H:i" }}</a></td>
+<td>{{ row.tester.code }}</td><td>{{ row.payload.version }} / {{ row.payload.sdk }}</td>
+<td>{{ row.results.verified|default:"0" }}</td><td>{{ row.results.failed|default:"0" }}</td></tr>
+{% empty %}<tr><td colspan="5">Nenhuma sessão enviada.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+{% if page.paginator.num_pages > 1 %}<span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>{% endif %}
+{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Próxima</a>{% endif %}
+{% endblock %}
