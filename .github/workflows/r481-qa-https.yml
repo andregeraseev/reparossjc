@@ -1,0 +1,87 @@
+name: R48.1 - homologação HTTPS temporária
+on:
+  push:
+    branches: [qa/r48-1-https-temporario]
+    paths:
+      - '.github/workflows/r481-qa-https.yml'
+      - 'qa/r481_stage*.py'
+      - 'qa/r481-handoff-public.pem'
+permissions:
+  contents: read
+concurrency:
+  group: r481-https-synthetic
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependências para QA
+        run: |
+          python -m pip install -r requirements-r48.txt 'gunicorn>=23,<24'
+      - name: Abrir HTTPS e verificar a API de dados fictícios
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$(mktemp -d "$RUNNER_TEMP/rsjc-r481.XXXXXXXX")"
+          curl --fail --silent --show-error --location --max-time 45 'https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-linux-amd64' --output "$root/cloudflared"
+          printf '%s  %s\n' '1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872' "$root/cloudflared" | sha256sum -c -
+          chmod 700 "$root/cloudflared"
+          "$root/cloudflared" tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:8048 > "$root/tunnel.log" 2>&1 &
+          echo "$!" > "$root/tunnel.pid"
+          origin=''
+          for attempt in {1..35}; do
+            origin="$(grep -m1 -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$root/tunnel.log" || true)"
+            if [[ -n "$origin" ]]; then break; fi
+            sleep 1
+          done
+          if [[ ! "$origin" =~ ^https://[a-z0-9-]+\.trycloudflare\.com$ ]]; then
+            echo 'O provedor não entregou o endereço temporário.'
+            exit 1
+          fi
+          export DJANGO_SETTINGS_MODULE=qa.r481_stage_settings
+          export RSJC_BACKUP_DJANGO_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export RSJC_BACKUP_HOSTS="${origin#https://}"
+          export RSJC_BACKUP_DB="$root/backup.sqlite3"
+          export RSJC_BACKUP_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          export RSJC_BACKUP_TRUST_HTTPS_PROXY=1
+          python manage.py migrate --no-input
+          gunicorn --bind 127.0.0.1:8048 --workers 1 --threads 2 --timeout 30 qa.r481_stage:application > "$root/server.log" 2>&1 &
+          echo "$!" > "$root/server.pid"
+          for attempt in {1..20}; do
+            status="$(curl --silent --max-time 5 --output /dev/null --write-out '%{http_code}' "$origin/api/rsjc-backup/v1/versions/" || true)"
+            if [[ "$status" == 401 ]]; then break; fi
+            sleep 1
+          done
+          if [[ "$status" != 401 ]]; then
+            echo "A API não ficou disponível por HTTPS (HTTP $status)."
+            exit 1
+          fi
+          mkdir -p "$root/handoff"
+          python -m qa.r481_stage "$origin" "$root/config.json" | tee "$root/handoff/verificacoes.txt"
+          openssl pkeyutl -encrypt -pubin -inkey qa/r481-handoff-public.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in "$root/config.json" -out "$root/handoff/acesso.bin"
+          jq -r .expires "$root/config.json" > "$root/expires"
+          rm "$root/config.json"
+          printf 'R481_STAGE_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r481-homologacao-https
+          path: ${{ env.R481_STAGE_ROOT }}/handoff/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Disponibilizar janela de teste
+        run: |
+          set -euo pipefail
+          root="$R481_STAGE_ROOT"
+          expire="$(cat "$root/expires")"
+          trap 'kill "$(cat "$root/server.pid")" "$(cat "$root/tunnel.pid")" 2>/dev/null || true; rm -r "$root"' EXIT
+          while (( $(date +%s) < expire )); do
+            kill -0 "$(cat "$root/server.pid")" "$(cat "$root/tunnel.pid")"
+            sleep 5
+          done
