@@ -1,0 +1,46 @@
+name: Painel de QA no site Reparos SJC
+on:
+  push:
+    branches: [deploy/painel-qa-no-site]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DJANGO_DEBUG: '0'
+      DJANGO_SECRET_KEY: 'fixture-ci-only-not-a-production-secret-000000000000000000000000'
+      DJANGO_ALLOWED_HOSTS: 'testserver,localhost,127.0.0.1'
+      RSJC_WORKSPACE_ID: 'ws_qa_ci'
+      RSJC_SUPPORT_INGEST_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'Django>=5.2,<5.3' 'django-csp>=4,<5'
+      - name: Conferir o site com a rota desabilitada
+        run: |
+          set -euo pipefail
+          python manage.py check
+          python manage.py shell -c 'from django.test import Client; c = Client(); assert c.get("/", secure=True).status_code == 200; assert c.get("/qa/", secure=True).status_code == 404; print("PASS home pública e painel desativado por padrão")'
+      - name: Verificar isolamento do painel e regressão do site
+        run: |
+          set -euo pipefail
+          export RSJC_QA_DB_PATH="$RUNNER_TEMP/reparossjc-qa.sqlite3"
+          python manage.py check
+          python - <<'PYTHON'
+          import sqlite3
+          with sqlite3.connect("db.sqlite3") as db:
+              db.execute("CREATE TABLE qa_ci_sentinel (id INTEGER PRIMARY KEY)")
+              db.execute("INSERT INTO qa_ci_sentinel VALUES (1)")
+          PYTHON
+          python manage.py makemigrations qa_monitor --check --dry-run
+          sha256sum db.sqlite3 > "$RUNNER_TEMP/site-db.sha256"
+          python manage.py migrate qa_monitor --database=rsjc_qa --noinput
+          sha256sum -c "$RUNNER_TEMP/site-db.sha256"
+          python manage.py test qa_monitor -v 2
