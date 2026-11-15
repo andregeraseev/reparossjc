@@ -1,0 +1,10 @@
+{% extends "qa_monitor/base.html" %}
+{% block title %}Entrar · Testes Reparos SJC{% endblock %}
+{% block body %}
+<h1>Painel privado de testes</h1>
+<form class="card" method="post">
+{% csrf_token %}
+{{ form.as_p }}
+<button type="submit">Entrar</button>
+</form>
+{% endblock %}

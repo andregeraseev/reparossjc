@@ -70,3 +70,18 @@ CONTENT_SECURITY_POLICY = {
         "frame-ancestors": ("'none'",),
     }
 }
+
+
+# A path in the private hosting environment enables the QA routes.
+RSJC_QA_DB_PATH = os.environ.get("RSJC_QA_DB_PATH", "").strip()
+if RSJC_QA_DB_PATH:
+    qa_database = Path(RSJC_QA_DB_PATH).expanduser()
+    if DEBUG or not qa_database.is_absolute() or qa_database.resolve() == Path(DATABASES["default"]["NAME"]).resolve():
+        raise RuntimeError("QA requires DEBUG=False and its own absolute database path")
+    INSTALLED_APPS = [*INSTALLED_APPS, "qa_monitor"]
+    DATABASES["rsjc_qa"] = {"ENGINE": "django.db.backends.sqlite3", "NAME": qa_database, "OPTIONS": {"timeout": 20}}
+    DATABASE_ROUTERS = ["qa_monitor.router.QaDatabaseRouter", *globals().get("DATABASE_ROUTERS", [])]
+    RSJC_QA_TRUST_CLIENT_IP_PROXY = os.environ.get("RSJC_QA_TRUST_CLIENT_IP_PROXY") == "1"
+    RSJC_QA_RETENTION_DAYS = int(os.environ.get("RSJC_QA_RETENTION_DAYS", "30"))
+    if RSJC_QA_RETENTION_DAYS < 1:
+        raise RuntimeError("RSJC_QA_RETENTION_DAYS must be positive")
