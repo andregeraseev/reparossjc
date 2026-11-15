@@ -3,18 +3,23 @@ import json
 import re
 import uuid
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
+from ipaddress import ip_address
 from functools import wraps
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
+from django.db.models import F
 from django.core.paginator import Paginator
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.utils.crypto import salted_hmac
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import Session, Tester
+from .models import LoginWindow, Session, Tester
 
 
 MAX_BYTES = 24 * 1024
@@ -53,13 +58,16 @@ def validate(data):
         return False
     previous = 0
     for event in data["events"]:
-        if not isinstance(event, dict) or event.keys() != {"step", "result", "at"}:
+        required = {"step", "result", "at"}
+        if not isinstance(event, dict) or event.keys() not in (required, required | {"ms"}):
             return False
         step = event["step"]
         if (not isinstance(step, str) or step not in LABELS
                 or not integer(event["at"], previous, data["duration"])):
             return False
         accepted = ("opened",) if step in SCREENS else ("failed",) if step == "app_error" else ("verified", "failed")
+        if "ms" in event and (not step.startswith("save_") or not integer(event["ms"], 0, 60000)):
+            return False
         if event["result"] not in accepted:
             return False
         previous = event["at"]
@@ -127,3 +135,27 @@ def detail(request, session_id):
     row = get_object_or_404(Session.objects.select_related("tester"), pk=session_id)
     events = [{**event, "label": LABELS[event["step"]]} for event in row.payload["events"]]
     return render(request, "qa_monitor/detail.html", {"row": row, "events": events})
+
+
+class QaLoginView(LoginView):
+    template_name = "qa_monitor/login.html"
+    seconds = 300
+    attempts_per_address = 10
+
+    def post(self, request, *args, **kwargs):
+        raw_address = request.META.get("REMOTE_ADDR", "")
+        if settings.RSJC_QA_TRUST_CLIENT_IP_PROXY:
+            raw_address = request.headers.get("X-Real-IP", raw_address)
+        try:
+            address = str(ip_address(raw_address))
+        except ValueError:
+            address = "unavailable"
+
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        window = timestamp - timestamp % self.seconds
+        key = salted_hmac("rsjc.qa.login", f"{address}|{window}", algorithm="sha256").hexdigest()
+        LoginWindow.objects.get_or_create(key=key, defaults={"started": datetime.fromtimestamp(window, timezone.utc)})
+        if not LoginWindow.objects.filter(key=key, attempts__lt=self.attempts_per_address).update(attempts=F("attempts") + 1):
+            return HttpResponse("Limite de tentativas atingido. Tente novamente em alguns minutos.", status=429,
+                                headers={"Retry-After": str(window + self.seconds - timestamp), "Cache-Control": "no-store"})
+        return super().post(request, *args, **kwargs)

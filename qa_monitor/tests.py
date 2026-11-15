@@ -2,12 +2,17 @@ import hashlib
 import json
 import uuid
 from copy import deepcopy
+from datetime import timedelta
+from io import StringIO
+from unittest.mock import patch
 from time import time
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import Client, TestCase
+from django.utils import timezone
 
-from .models import Session, Tester
+from .models import LoginWindow, Session, Tester
 
 
 URL = "/api/rsjc-qa/v1/sessions/"
@@ -89,3 +94,41 @@ class QaMonitorTests(TestCase):
         self.assertContains(login, "Sessões enviadas")
         cookie = client.cookies["rsjc_r49_session"]
         self.assertTrue(cookie["secure"] and cookie["httponly"])
+
+
+    def test_optional_write_duration_is_bounded_and_displayed(self):
+        self.payload["events"][0]["ms"] = 100
+        self.assertEqual(self.post().status_code, 422)
+        del self.payload["events"][0]["ms"]
+        self.payload["events"][1]["ms"] = 60001
+        self.assertEqual(self.post().status_code, 422)
+        self.payload["events"][1]["ms"] = 0
+        self.assertEqual(self.post().status_code, 201)
+        self.client.force_login(get_user_model().objects.create_user("qa-ms", is_staff=True))
+        self.assertContains(self.client.get(f"/qa/sessions/{self.payload['id']}/", secure=True), "0 ms")
+
+    def test_login_throttles_post_per_ip(self):
+        url = "/qa/login/"
+        fixed = timezone.now().replace(minute=0, second=0, microsecond=0)
+        with patch("qa_monitor.views.datetime", wraps=timezone.datetime) as clock:
+            clock.now.return_value = fixed
+            for i in range(10):
+                self.assertEqual(self.client.post(url, secure=True, HTTP_X_REAL_IP=f"192.0.2.{i + 1}").status_code, 200)
+            blocked = self.client.post(url, secure=True, HTTP_X_REAL_IP="192.0.2.20")
+            self.assertEqual(blocked.status_code, 429)
+            self.assertEqual(blocked.headers["Retry-After"], "300")
+            self.assertEqual(self.client.post(url, secure=True, REMOTE_ADDR="192.0.2.10").status_code, 200)
+        self.assertIn("max-age=", self.client.get(url, secure=True).headers["Strict-Transport-Security"])
+
+    def test_retention_prunes_only_expired_qa_entries(self):
+        self.assertEqual(self.post().status_code, 201)
+        first = self.payload["id"]
+        self.payload["id"] = str(uuid.uuid4())
+        self.assertEqual(self.post().status_code, 201)
+        old = timezone.now() - timedelta(days=31)
+        Session.objects.filter(pk=first).update(received_at=old)
+        LoginWindow.objects.create(key="expired", started=old)
+        LoginWindow.objects.create(key="recent", started=timezone.now())
+        call_command("rsjc_qa_prune", stdout=StringIO())
+        self.assertEqual(str(Session.objects.get().pk), self.payload["id"])
+        self.assertEqual(LoginWindow.objects.get().key, "recent")

@@ -13,3 +13,9 @@ class Session(models.Model):
     received_at = models.DateTimeField(auto_now_add=True)
     digest = models.CharField(max_length=64)
     payload = models.JSONField()
+
+
+class LoginWindow(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    started = models.DateTimeField(db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)

@@ -22,3 +22,12 @@ O painel fica em `/qa/` e exige login da equipe. O comando de token imprime uma 
 No app, abra **Ajustes → Backup → Sessão de teste**. Carregue o exemplo, inicie e autorize a coleta, use as telas e encerre a sessão. Selecione **Enviar diagnóstico** e informe a URL HTTPS do ambiente e o token do testador. A sessão local pode ser descartada quando o envio for confirmado no painel.
 
 A API de diagnósticos é `POST /api/rsjc-qa/v1/sessions/`. Ela verifica o token, o tamanho e a lista fechada de campos e valores. O mesmo identificador com conteúdo idêntico é aceito novamente. Um identificador existente com conteúdo ou conta diferente é recusado. A publicação é independente do site e do servidor de backups da R48.
+
+
+### Retenção e login
+
+Aplique as migrações antes de servir o painel. Agende `python manage.py rsjc_qa_prune` diariamente com as variáveis da instância isolada. O comando remove diagnósticos após 30 dias por padrão, configuráveis por `RSJC_QA_RETENTION_DAYS`, e contadores de login após um dia. A exclusão no Android atua sobre a cópia local da sessão.
+
+O login limita cada endereço a 10 tentativas por janela de 5 minutos. Use `RSJC_QA_TRUST_CLIENT_IP_PROXY=1` somente se o proxy for o único ponto de entrada e sobrescrever `X-Real-IP` com o endereço verificado. Em um proxy sem essa garantia, mantenha o padrão de usar `REMOTE_ADDR`.
+
+O host de QA usa HSTS por um dia por padrão, ajustável por `RSJC_QA_HSTS_SECONDS`. Verifique o cabeçalho no domínio dedicado após configurar o HTTPS.
