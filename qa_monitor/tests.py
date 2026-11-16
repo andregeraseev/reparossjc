@@ -1,8 +1,9 @@
+import base64
 import hashlib
 import json
 import uuid
 from datetime import timedelta
-from io import StringIO
+from io import BytesIO, StringIO
 from time import time
 from unittest.mock import patch
 
@@ -15,7 +16,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import LoginWindow, Session, StaffAccount, StaffSession, Tester
+from .models import BugReport, LoginWindow, Session, StaffAccount, StaffSession, Tester
 from .site_auth import COOKIE
 
 LOGIN = "/qa/login/"
@@ -56,6 +57,7 @@ class QaSiteTests(TestCase):
         qa_tables = set(connections["rsjc_qa"].introspection.table_names())
         site_tables = set(connections["default"].introspection.table_names())
         self.assertIn("qa_monitor_session", qa_tables)
+        self.assertIn("qa_monitor_bugreport", qa_tables)
         self.assertIn("qa_monitor_staffaccount", qa_tables)
         self.assertNotIn("auth_user", qa_tables)
         self.assertFalse({name for name in site_tables if name.startswith("qa_monitor_")})
@@ -141,3 +143,73 @@ class QaSiteTests(TestCase):
         self.assertEqual(str(Session.objects.get().pk), current["id"])
         self.assertFalse(StaffSession.objects.filter(pk="f" * 64).exists())
         self.assertFalse(LoginWindow.objects.filter(pk="old").exists())
+
+    def bug(self, session="", picture="", events=None):
+        return dict(id=str(uuid.uuid4()), sdk=36, version="18.50", screen="agenda",
+                    description="Agenda não abriu.\n<em>Texto do testador</em>",
+                    session=session, events=events or [], screenshot=picture)
+
+    def send_bug(self, payload, token=TOKEN, secure=True):
+        return self.client.post("/api/rsjc-qa/v1/bugs/", json.dumps(payload), content_type="application/json",
+                                secure=secure, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    def test_v2_actions_are_bounded_and_v1_stays_compatible(self):
+        payload = self.payload()
+        payload["events"].append(dict(step="edit_payment", result="acted", at=8))
+        self.assertEqual(self.send(payload).status_code, 422)
+        payload["protocol"] = 2
+        payload["version"] = "18.50"
+        self.assertEqual(self.send(payload).status_code, 201)
+        wrong = {**payload, "id": str(uuid.uuid4()), "events": [dict(step="search", result="acted", at=1, value="free text")]}
+        self.assertEqual(self.send(wrong).status_code, 422)
+        oversized = {**wrong, "events": [dict(step="search", result="acted", at=1)] * 501}
+        self.assertEqual(self.send(oversized).status_code, 422)
+
+    def test_bug_with_jpeg_and_timeline_stays_private(self):
+        from PIL import Image
+        jpeg = BytesIO()
+        Image.new("RGB", (120, 84), "#03234d").save(jpeg, "JPEG")
+        session = self.payload()
+        self.assertEqual(self.send(session).status_code, 201)
+        bug = self.bug(session["id"], base64.b64encode(jpeg.getvalue()).decode(),
+                       [dict(step="open_bug", result="acted", at=9)])
+        self.assertEqual(self.send_bug(bug, "Z" * 43).status_code, 401)
+        self.assertIn(self.send_bug(bug, secure=False).status_code, (301, 403))
+        self.assertEqual(self.send_bug(bug).status_code, 201)
+        self.assertEqual(self.send_bug(bug).status_code, 200)
+        self.assertEqual(self.send_bug({**bug, "description": "outro"}).status_code, 409)
+        self.assertEqual(BugReport.objects.count(), 1)
+        receipt = self.send_bug(bug)
+        self.assertEqual(receipt.json(), {"id": bug["id"]})
+        screenshot = reverse("qa_bug_screenshot", args=[bug["id"]])
+        detail = reverse("qa_bug_detail", args=[bug["id"]])
+        self.assertEqual(self.client.get(screenshot, secure=True).status_code, 302)
+        self.assertEqual(self.client.get(detail, secure=True).status_code, 302)
+        self.assertEqual(self.login().status_code, 302)
+        self.assertContains(self.client.get("/qa/bugs/", secure=True), "Agenda")
+        view = self.client.get(detail, secure=True)
+        self.assertContains(view, "Abrir relato")
+        self.assertContains(view, "Abrir sessão completa")
+        self.assertContains(view, "&lt;em&gt;Texto do testador&lt;/em&gt;")
+        image = self.client.get(screenshot, secure=True)
+        self.assertEqual(image.content, jpeg.getvalue())
+        self.assertIn("no-store", image.headers["Cache-Control"])
+        self.assertEqual(image.headers["Content-Type"], "image/jpeg")
+
+    def test_text_only_and_invalid_reports(self):
+        bug = self.bug()
+        for invalid in (
+            {**bug, "description": " "},
+            {**bug, "screenshot": base64.b64encode(b"not a jpeg").decode()},
+            {**bug, "events": [dict(step="open_bug", result="acted", at=9)]},
+            {**bug, "screen": "Texto digitado na ficha"},
+        ):
+            self.assertEqual(self.send_bug(invalid).status_code, 422)
+        self.assertEqual(self.send_bug(bug).status_code, 201)
+        self.assertEqual(self.login().status_code, 302)
+        self.assertEqual(self.client.get(reverse("qa_bug_screenshot", args=[bug["id"]]), secure=True).status_code, 404)
+        old = timezone.now() - timedelta(days=31)
+        BugReport.objects.filter(pk=bug["id"]).update(received_at=old)
+        self.assertEqual(self.client.get(reverse("qa_bug_detail", args=[bug["id"]]), secure=True).status_code, 404)
+        call_command("rsjc_qa_prune", stdout=StringIO())
+        self.assertFalse(BugReport.objects.exists())

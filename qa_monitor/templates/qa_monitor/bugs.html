@@ -1,0 +1,14 @@
+{% extends "qa_monitor/base.html" %}
+{% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
+{% block body %}
+<p><a href="{% url 'qa_dashboard' %}">Sessões enviadas</a></p>
+<h1>Relatos de bugs</h1>
+<div class="card table"><table><thead><tr><th scope="col">Recebido</th><th scope="col">Testador</th><th scope="col">Tela</th><th scope="col">Observação</th></tr></thead>
+<tbody>{% for row in page %}<tr>
+<td><a href="{% url 'qa_bug_detail' row.id %}">{{ row.received_at|date:"d/m/Y H:i" }}</a></td>
+<td>{{ row.tester.code }}</td><td>{{ row.screen }}</td><td>{{ row.payload.description|truncatechars:90 }}</td>
+</tr>{% empty %}<tr><td colspan="4">Nenhum relato recebido.</td></tr>{% endfor %}</tbody></table></div>
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+{% if page.paginator.num_pages > 1 %}<span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>{% endif %}
+{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Próxima</a>{% endif %}
+{% endblock %}

@@ -2,6 +2,7 @@
 {% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
 {% block body %}
 <h1>Sessões enviadas</h1>
+<p><a href="{% url 'qa_bugs' %}">Relatos de bugs</a></p>
 <div class="card table">
 <table><thead><tr><th scope="col">Recebida</th><th scope="col">Testador</th><th scope="col">Versão / Android SDK</th><th scope="col">Gravações conferidas</th><th scope="col">Falhas</th></tr></thead>
 <tbody>

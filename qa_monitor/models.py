@@ -31,3 +31,12 @@ class StaffSession(models.Model):
     key_hash = models.CharField(max_length=64, primary_key=True)
     staff = models.ForeignKey(StaffAccount, on_delete=models.CASCADE)
     expires_at = models.DateTimeField(db_index=True)
+
+
+class BugReport(models.Model):
+    id = models.UUIDField(primary_key=True, editable=False)
+    tester = models.ForeignKey(Tester, on_delete=models.CASCADE)
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    digest = models.CharField(max_length=64)
+    payload = models.JSONField()
+    screenshot = models.BinaryField(default=bytes)

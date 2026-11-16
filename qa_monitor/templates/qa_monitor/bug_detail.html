@@ -1,0 +1,14 @@
+{% extends "qa_monitor/base.html" %}
+{% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
+{% block body %}
+<p><a href="{% url 'qa_bugs' %}">Voltar aos relatos</a></p>
+<h1>Relato {{ row.id|stringformat:"s"|slice:":8" }}</h1>
+<p>{{ row.tester.code }} · {{ screen }} · versão {{ row.payload.version }} · Android SDK {{ row.payload.sdk }}</p>
+<div class="card"><h2>Descrição do testador</h2>{{ row.payload.description|linebreaks }}</div>
+{% if row.screenshot %}<div class="card">
+<h2>Captura da tela</h2>
+<a href="{% url 'qa_bug_screenshot' row.id %}"><img class="bug-screenshot" src="{% url 'qa_bug_screenshot' row.id %}" alt="Captura enviada pelo testador"></a>
+</div>{% endif %}
+{% if session %}<p><a href="{% url 'qa_detail' session.id %}">Abrir sessão completa</a></p>{% endif %}
+{% if events %}<h2>Últimas ações registradas</h2>{% include "qa_monitor/events.html" %}{% endif %}
+{% endblock %}

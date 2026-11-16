@@ -1,0 +1,5 @@
+<div class="card table"><table><thead><tr><th scope="col">Desde o início</th><th scope="col">Etapa</th><th scope="col">Resultado</th><th scope="col">Gravação</th></tr></thead>
+<tbody>{% for event in events %}<tr><td>{{ event.at }} s</td><td>{{ event.label }}</td>
+<td>{% if event.result == "verified" %}Gravação conferida{% elif event.result == "failed" %}Falha{% elif event.result == "acted" %}Ação{% else %}Tela aberta{% endif %}</td>
+<td>{% if event.ms != None %}{{ event.ms }} ms{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4">Nenhum evento registrado.</td></tr>{% endfor %}</tbody></table></div>
