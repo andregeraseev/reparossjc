@@ -5,13 +5,13 @@ import io
 import json
 import re
 import uuid
-from collections import Counter
 from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -27,6 +27,13 @@ BUG_BYTES = 320 * 1024
 SCREENSHOT_BYTES = 220 * 1024
 BUG_KEYS = {"id", "version", "sdk", "screen", "description", "session", "events", "screenshot"}
 SESSION_KEYS = {"protocol", "id", "device", "version", "sdk", "form", "started", "duration", "events"}
+LIVE_KEYS = SESSION_KEYS | {"revision", "active"}
+LIVE_IDENTITY = ("device", "version", "sdk", "form", "started")
+TESTER_NAMES = {"qa-andre": "André", "qa-rafa": "Rafa"}
+
+
+def tester_name(code):
+    return TESTER_NAMES.get(code, code)
 
 
 def valid_uuid(value):
@@ -117,6 +124,51 @@ def submit(request):
     return json_response({"id": str(row.pk)}, 201 if created else 200)
 
 
+@csrf_exempt
+@require_POST
+def tester_identity(request):
+    tester, data, error = read_submission(request, 64)
+    if error is not None:
+        return error
+    if data != {}:
+        return json_response({"error": "invalid_identity_request"}, 422)
+    return json_response({"code": tester.code, "name": tester_name(tester.code)}, 200)
+
+
+@csrf_exempt
+@require_POST
+def submit_live(request):
+    tester, data, error = read_submission(request, MAX_BYTES)
+    if error is not None:
+        return error
+    if (not isinstance(data, dict) or data.keys() != LIVE_KEYS or not integer(data["protocol"], 3, 3)
+            or type(data["active"]) is not bool or not integer(data["revision"], 1, 10_000_000)
+            or not validate({**{key: data[key] for key in SESSION_KEYS}, "protocol": 2})):
+        return json_response({"error": "invalid_diagnostics"}, 422)
+    digest = hashlib.sha256(json.dumps(data, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+    receipt = {"id": data["id"], "revision": data["revision"]}
+    row, created = Session.objects.get_or_create(pk=data["id"], defaults={
+        "tester": tester, "payload": data, "digest": digest,
+    })
+    if created:
+        return json_response(receipt, 201)
+    for _ in range(4):
+        stored = row.payload
+        if (row.tester_id != tester.pk or stored.get("protocol") != 3
+                or any(stored[key] != data[key] for key in LIVE_IDENTITY)):
+            break
+        if row.digest == digest or data["revision"] < stored["revision"]:
+            return json_response(receipt, 200)
+        if (data["revision"] == stored["revision"] or not stored["active"]
+                or data["duration"] < stored["duration"]):
+            break
+        if Session.objects.filter(pk=row.pk, digest=row.digest).update(
+                payload=data, digest=digest, received_at=timezone.now()):
+            return json_response(receipt, 200)
+        row.refresh_from_db(fields=["payload", "digest"])
+    return json_response({"error": "session_conflict"}, 409)
+
+
 def retained_sessions():
     since = timezone.now() - timedelta(days=settings.RSJC_QA_RETENTION_DAYS)
     return Session.objects.select_related("tester").filter(received_at__gte=since)
@@ -125,10 +177,32 @@ def retained_sessions():
 @staff_view
 def dashboard(request):
     rows = retained_sessions().order_by("-received_at")
+    reports = retained_bugs().defer("screenshot").order_by("-received_at")
+    codes = sorted(set(rows.values_list("tester__code", flat=True).distinct())
+                   | set(reports.values_list("tester__code", flat=True).distinct())
+                   | set(Tester.objects.filter(enabled=True).values_list("code", flat=True)))
+    tester = request.GET.get("tester") if request.GET.get("tester") in codes else ""
+    if tester:
+        rows = rows.filter(tester__code=tester)
+        reports = reports.filter(tester__code=tester)
     page = Paginator(rows, 30).get_page(request.GET.get("page"))
     for row in page:
-        row.results = Counter(event["result"] for event in row.payload["events"])
-    return render(request, "qa_monitor/dashboard.html", {"page": page})
+        row.tester_name = tester_name(row.tester.code)
+        row.recent_events = event_rows(row.payload["events"][-6:])[::-1]
+        row.testing = row.payload.get("active", False) and row.received_at >= timezone.now() - timedelta(seconds=90)
+    recent_reports = list(reports[:8])
+    for report in recent_reports:
+        report.screen_name = LABELS[report.payload["screen"]]
+        report.tester_name = tester_name(report.tester.code)
+    return render(request, "qa_monitor/dashboard.html", {
+        "page": page, "reports": recent_reports, "tester_filter": tester,
+        "testers": [{"code": code, "name": tester_name(code)} for code in codes],
+    })
+
+
+@staff_view
+def panel_script(request):
+    return HttpResponse(render_to_string("qa_monitor/panel.js"), content_type="text/javascript; charset=utf-8")
 
 
 @staff_view

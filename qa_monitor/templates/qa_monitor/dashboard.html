@@ -1,17 +1,53 @@
 {% extends "qa_monitor/base.html" %}
+{% block head %}<script defer src="{% url 'qa_panel_script' %}"></script>{% endblock %}
 {% block logout %}<form method="post" action="{% url 'qa_logout' %}">{% csrf_token %}<button>Sair</button></form>{% endblock %}
 {% block body %}
-<h1>Sessões enviadas</h1>
-<p><a href="{% url 'qa_bugs' %}">Relatos de bugs</a></p>
-<div class="card table">
-<table><thead><tr><th scope="col">Recebida</th><th scope="col">Testador</th><th scope="col">Versão / Android SDK</th><th scope="col">Gravações conferidas</th><th scope="col">Falhas</th></tr></thead>
-<tbody>
-{% for row in page %}<tr><td><a href="{% url 'qa_detail' row.id %}">{{ row.received_at|date:"d/m/Y H:i" }}</a></td>
-<td>{{ row.tester.code }}</td><td>{{ row.payload.version }} / {{ row.payload.sdk }}</td>
-<td>{{ row.results.verified|default:"0" }}</td><td>{{ row.results.failed|default:"0" }}</td></tr>
-{% empty %}<tr><td colspan="5">Nenhuma sessão enviada.</td></tr>{% endfor %}
-</tbody></table></div>
-{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Anterior</a>{% endif %}
-{% if page.paginator.num_pages > 1 %}<span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>{% endif %}
-{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Próxima</a>{% endif %}
+<div class="heading">
+  <div><h1>Painel de testes</h1><p class="muted" id="qa-refresh-status">Atualização automática a cada 8 segundos</p></div>
+  <form method="get" class="filter">
+    <label for="qa-tester">Testador</label>
+    <select id="qa-tester" name="tester">
+      <option value="">Todos</option>
+      {% for tester in testers %}<option value="{{ tester.code }}"{% if tester_filter == tester.code %} selected{% endif %}>{{ tester.name }}</option>{% endfor %}
+    </select>
+    <button>Filtrar</button>
+  </form>
+</div>
+<section id="qa-live-content" class="panel-grid">
+  <section aria-labelledby="qa-activity">
+    <h2 id="qa-activity">Atividade recente</h2>
+    {% for row in page %}
+    <article class="card session">
+      <div class="session-title"><a href="{% url 'qa_detail' row.id %}">{{ row.tester_name }} · sessão {{ row.id|stringformat:"s"|slice:":8" }}</a>
+        {% if row.testing %}<span class="status">Em teste</span>{% endif %}</div>
+      <p class="muted">Última atualização {{ row.received_at|date:"d/m/Y H:i:s" }} · v{{ row.payload.version }}</p>
+      <ol class="timeline">
+      {% for event in row.recent_events %}
+        <li><span>{{ event.at }} s</span>
+          {% if event.result == "opened" %}Abriu {{ event.label }}
+          {% elif event.result == "verified" %}Gravação conferida · {{ event.label }}
+          {% elif event.result == "failed" %}Falha · {{ event.label }}
+          {% else %}{{ event.label }}{% endif %}
+        </li>
+      {% empty %}<li>Aguardando a próxima ação.</li>{% endfor %}
+      </ol>
+    </article>
+    {% empty %}<p class="card">Nenhuma sessão enviada.</p>{% endfor %}
+    <nav aria-label="Páginas de atividade">
+      {% if page.has_previous %}<a href="?tester={{ tester_filter|urlencode }}&amp;page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+      {% if page.paginator.num_pages > 1 %}<span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>{% endif %}
+      {% if page.has_next %}<a href="?tester={{ tester_filter|urlencode }}&amp;page={{ page.next_page_number }}">Próxima</a>{% endif %}
+    </nav>
+  </section>
+  <section aria-labelledby="qa-reports">
+    <h2 id="qa-reports">Relatos de bugs</h2>
+    {% for row in reports %}
+    <article class="card report">
+      <p class="muted">{{ row.tester_name }} · {{ row.screen_name }} · {{ row.received_at|date:"d/m H:i" }}</p>
+      <a href="{% url 'qa_bug_detail' row.id %}">{{ row.payload.description|truncatechars:110 }}</a>
+    </article>
+    {% empty %}<p class="card">Nenhum relato recebido.</p>{% endfor %}
+    <p><a href="{% url 'qa_bugs' %}">Ver todos os relatos</a></p>
+  </section>
+</section>
 {% endblock %}

@@ -119,6 +119,43 @@ class QaSiteTests(TestCase):
         self.assertEqual(self.send({**payload, "events": [{"step": "app_error", "result": "cliente", "at": 2}]}).status_code, 422)
         self.assertFalse(Session.objects.exists())
 
+    def test_live_delivery_and_dashboard_preserve_identity_and_order(self):
+        tester = Tester.objects.create(code="qa-andre", token_hash=hashlib.sha256(("B" * 43).encode()).hexdigest())
+        live_url = "/api/rsjc-qa/v1/live/"
+        identity = "/api/rsjc-qa/v1/identity/"
+
+        def post(url, data, token="B" * 43):
+            return self.client.post(url, json.dumps(data), content_type="application/json", secure=True,
+                                    HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        self.assertEqual(post(identity, {}).json(), {"code": "qa-andre", "name": "André"})
+        first = {**self.payload(), "protocol": 3, "revision": 1, "active": True}
+        self.assertEqual(post(live_url, first, "Z" * 43).status_code, 401)
+        self.assertEqual(post(live_url, first).status_code, 201)
+        self.assertEqual(post(live_url, first).status_code, 200)
+        changed = {**first, "revision": 2, "events": first["events"] + [dict(step="open_bug", result="acted", at=8)]}
+        self.assertEqual(post(live_url, changed, TOKEN).status_code, 409)
+        self.assertEqual(post(live_url, {**changed, "device": str(uuid.uuid4())}).status_code, 409)
+        self.assertEqual(post(live_url, {**changed, "events": [dict(step="search", result="acted", at=2, value="segredo")]}).status_code, 422)
+        self.assertEqual(post(live_url, changed).status_code, 200)
+        self.assertEqual(post(live_url, first).status_code, 200)
+        self.assertEqual(Session.objects.get(tester=tester).payload, changed)
+        self.assertEqual(self.send_bug(self.bug(first["id"]), "B" * 43).status_code, 201)
+        self.assertRedirects(self.client.get("/qa/panel.js", secure=True), LOGIN, fetch_redirect_response=False)
+        self.assertEqual(self.login().status_code, 302)
+        dashboard = self.client.get("/qa/?tester=qa-andre", secure=True)
+        self.assertContains(dashboard, "André")
+        self.assertContains(dashboard, "Em teste")
+        self.assertContains(dashboard, "Abrir relato")
+        self.assertContains(dashboard, "Agenda não abriu")
+        self.assertNotContains(self.client.get("/qa/?tester=qa-01", secure=True), "Abrir relato")
+        self.assertContains(self.client.get("/qa/panel.js", secure=True), "setInterval(update, 8000)")
+        closed = {**changed, "revision": 3, "active": False}
+        self.assertEqual(post(live_url, closed).status_code, 200)
+        self.assertEqual(post(live_url, {**changed, "revision": 4}).status_code, 409)
+        self.assertNotContains(self.client.get("/qa/?tester=qa-andre", secure=True), "Em teste")
+        self.assertEqual(Session.objects.count(), 1)
+
     def test_login_limiting_isolated_from_site(self):
         now = timezone.now().replace(second=0, microsecond=0)
         with patch("qa_monitor.site_auth.timezone.now", return_value=now):

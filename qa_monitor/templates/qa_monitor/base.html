@@ -11,6 +11,8 @@ header button{background:#294c61}.card{background:white;border:1px solid #d2dde5
 input{display:block;box-sizing:border-box;max-width:100%;width:22rem;padding:.5rem;margin:.15rem 0 .9rem;border:1px solid #6d879a;border-radius:.25rem;font:inherit}
 :focus-visible{outline:3px solid #e69518;outline-offset:2px} .muted{color:#486578} .errorlist{color:#8d2020}
 .bug-screenshot{display:block;max-width:min(100%,520px);height:auto}.card{overflow-wrap:anywhere}
-</style></head><body>
+h2{font-size:1.2rem;margin-top:0}.heading,.filter,.session-title{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}.heading,.session-title{justify-content:space-between}.heading p{margin:.25rem 0 1.25rem}.heading h1{margin:0}.filter select{font:inherit;padding:.4rem;max-width:100%}.panel-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:1.15rem}.session,.report{margin-bottom:.65rem}.session-title a{font-weight:700}.session p,.report p{margin:.15rem 0}.report p{font-size:.9rem}.status{background:#d9f0e4;color:#1b6040;font-size:.85rem;padding:.1rem .55rem;border-radius:.3rem}.timeline{list-style:none;margin:.6rem 0 0;padding:0}.timeline li+li{margin-top:.15rem}.timeline span{display:inline-block;min-width:3.1rem;color:#486578;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.panel-grid{grid-template-columns:1fr}.heading{align-items:start;margin-bottom:1rem}}
+</style>{% block head %}{% endblock %}</head><body>
 <header><strong>Reparos SJC · Testes</strong>{% block logout %}{% endblock %}</header><main>{% block body %}{% endblock %}</main>
 </body></html>
